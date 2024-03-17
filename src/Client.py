@@ -3,19 +3,20 @@ import socket
 
 # TODO: add method to close client
 
-# set client username
-username = input("Type in a username: ")
+# Allow client to set their username; used for display on the server
+username = input('Type in a username: ')
 
-# set host and port
+# Allow client to set server host IP & port number
 # TODO: add proper type checking
-host = input("Type in the host address: ")
-port = input("Type in the host port: ")
+host = input('Type in the host address: ')
+port = input('Type in the host port: ')
 
-# connecting the client to a host & port; dependent on user input
+# Connect the client to a host IP & port number; dependent on previous user input
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((host, int(port)))
 
-# Receive function for data from the server
+# function Receive
+# Receives & decodes data from the server; if any message can't be decoded, client disconnects
 def receive():
 	while True:
 		try:
@@ -26,18 +27,19 @@ def receive():
 			else:
 				print(message)
 		except:
-			print("An error occured, closing connection!")
+			print('An error occured, closing connection!')
 			client.close()
 			break
 
 # Send messages to the server
 def write(): # TODO: fix formatting; submitted messages are inserted between unsent messages
 	while True:
-		message = (f'{username}: {input("")}')
-		# constantly running user input function and as soon as enter is hit it sends a message and prompts for a new message
+		message = (f'{username}: {input('')}')
+		# User input function is always running in order to catch 'enter' key presses;
+		# Upon pressing enter, the current text is sent as a message to the server and another prompt is shown
 		client.send(message.encode('ascii'))
 		
-# These each need their own thread since it needs to send and receive simulatenously
+# Both functions need their own thread since we need to be able to send & recieve messages simultaneously
 receive_thread = threading.Thread(target=receive)
 receive_thread.start()
 
