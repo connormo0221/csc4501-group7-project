@@ -1,7 +1,7 @@
 import socket
 import threading
 
-nickname = input("choose a nickname: ")
+username = input("choose a username: ")
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -15,8 +15,8 @@ def receive():
 	while True:
 		try:
 			message = client.recv(1024).decode('ascii') #the server uses a client to send messages which is why client is here
-			if message == 'NICK':
-				client.send(nickname.encode('ascii'))
+			if message == 'ID':
+				client.send(username.encode('ascii'))
 			else:
 				print(message)
 		except:
@@ -29,7 +29,7 @@ def receive():
 
 def write():
 	while True:
-		message = (f'{nickname}: {input("")}')
+		message = (f'{username}: {input("")}')
 		#constantly running user input function and as soon as enter is hit it sends a message and prompts for a new message
 		client.send(message.encode('ascii'))
 		

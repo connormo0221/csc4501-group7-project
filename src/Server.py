@@ -10,10 +10,10 @@ server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
 #puts the server into listening mode
 server.listen() 
-print('server is listening')
+print('Server Online')
 
 clients = []	#these two match up
-nicknames = []
+usernames = []
 
 
 #Broadcast Method
@@ -37,9 +37,9 @@ def handle(client):
 			index = clients.index(client)
 			clients.remove(client)
 			client.close()
-			nickname = nicknames[index]
-			nicknames.remove(nickname)
-			broadcast(f'{nickname} has left the chat'.encode('ascii'))
+			username = usernames[index]
+			usernames.remove(username)
+			broadcast(f'{username} has left the chat'.encode('ascii'))
 			break
 
 
@@ -50,16 +50,16 @@ def receive():
 	while True:
 		#constantly running the accept method and if it finds anything it returns a client and address
 		client, address = server.accept() 
-		print(f"Connected with {str(address)}")
+		print(f"User has connected with IP and port {str(address)}")
 		
-		client.send('NICK'.encode('ascii'))
-		nickname = client.recv(1024).decode('ascii')
-		nicknames.append(nickname)
+		client.send('ID'.encode('ascii'))
+		username = client.recv(1024).decode('ascii')
+		usernames.append(username)
 		clients.append(client)
 		
-		print(f'Nickname of the client is {nickname}!')
-		broadcast(f'{nickname} has joined the server'.encode('ascii'))
-		client.send('Connected to the server succesfully'.encode('ascii'))
+		print(f'The username of the client is {username}!')
+		broadcast(f'{username} has joined the server'.encode('ascii'))
+		client.send('You have connected to the server succesfully'.encode('ascii'))
 		
 		#we run one thread for each connected client because they all need to be handled simultaneously
 		thread = threading.Thread(target=handle, args=(client,))
