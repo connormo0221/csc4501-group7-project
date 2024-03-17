@@ -1,7 +1,9 @@
 import threading
 import socket
+import os
 
-# TODO: add method to close server
+# TODO: add method to close server (that actually works and doesn't throw an exception)
+# TODO: {username} left the chat is not working, need to fix (ngrok issue?)
 
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998
@@ -35,13 +37,43 @@ def handle(client):
 			client.close()
 			username = usernames[index]
 			usernames.remove(username)
-			broadcast(f'{username} has left the chat.'.encode('ascii')) # TODO: not working, fix (ngrok issue?)
+			broadcast(f'{username} has left the chat.'.encode('ascii'))
 			break
+
+# function Command
+# Adds server-side commands for closing the server, viewing connected clients, etc.
+def command():
+	while True:
+		command = input('')
+		if command == "/exit":
+			print('Disconnecting clients...')
+			for client in clients:
+				index = clients.index(client)
+				clients.remove(client)
+				client.close()
+				username = usernames[index]
+				usernames.remove(username)
+			print('Closing server...')
+			os._exit(1)
+		elif command == '/view':
+			print('Clients connected:')
+			for client in clients:
+				index = clients.index(client)
+				username = usernames[index]
+				print(f'{username} is connected.')
+		elif command == '/help':
+			print('Server commands: /exit, /view.')
+		else:
+			print('Invalid command. Use /help to display available commands.')
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
+		# command thread needed to catch text input
+		command_thread = threading.Thread(target=command)
+		command_thread.start()
+
 		# always running the accept method; if it finds something, return client & address
 		client, address = server.accept() 
 		print(f'User has connected with IP and port {str(address)}.')
@@ -52,11 +84,10 @@ def receive():
 		clients.append(client)
 		
 		print(f'The username of the client is {username}.')
-		client.send(f'---\nSuccessfully connected to the server!\n---'.encode('ascii'))
 		broadcast(f'{username} has joined the server.'.encode('ascii'))
-		
+
 		# we run one thread for each connected client because they all need to be handled simultaneously
-		thread = threading.Thread(target=handle, args=(client,))
-		thread.start()
+		handle_thread = threading.Thread(target=handle, args=(client,))
+		handle_thread.start()
 
 receive()

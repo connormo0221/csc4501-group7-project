@@ -1,13 +1,15 @@
 import threading
 import socket
+import os
 
-# TODO: add method to close client
+# TODO: add proper type checking for host & port variables
+# TODO: add error handling to failed connections
+# TODO: fix formatting; submitted messages are inserted between unsent messages
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
 
 # Allow client to set server host IP & port number
-# TODO: add proper type checking
 host = input('Type in the host address: ')
 port = input('Type in the host port: ')
 
@@ -16,7 +18,7 @@ client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((host, int(port)))
 
 # function Receive
-# Receives & decodes data from the server; if any message can't be decoded, client disconnects
+# Receives & decodes data from the server; if data can't be decoded, client disconnects
 def receive():
 	while True:
 		try:
@@ -27,17 +29,23 @@ def receive():
 			else:
 				print(message)
 		except:
-			print('An error occured, closing connection!')
+			print('Data transfer stopped, closing connection.')
 			client.close()
-			break
+			os._exit(1)
 
-# Send messages to the server
-def write(): # TODO: fix formatting; submitted messages are inserted between unsent messages
-	while True:
-		message = (f'{username}: {input('')}')
-		# User input function is always running in order to catch 'enter' key presses;
-		# Upon pressing enter, the current text is sent as a message to the server and another prompt is shown
-		client.send(message.encode('ascii'))
+# function Write
+# Waits for user input & then sends a message to the server upon pressing the enter key
+def write():
+	# User input function is always running in order to catch input
+	while True:	
+		raw = input('')
+		if raw == '/exit':
+			print('Exiting the server...')
+			client.close()
+			os._exit(1)
+		else:
+			message = (f'{username}: {raw}')
+			client.send(message.encode('ascii'))
 		
 # Both functions need their own thread since we need to be able to send & recieve messages simultaneously
 receive_thread = threading.Thread(target=receive)
