@@ -1,32 +1,26 @@
 import threading
 import socket
 
-# localhost, change for a webserver
-host = '127.0.0.1' 
-#don't user reserved ports 1-10,000
-port = 31103 
+host = '127.0.0.1' # localhost 
+port = 31103 # don't use reserved ports 1-10,000
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
-#puts the server into listening mode
-server.listen() 
+server.listen() # puts the server into listening mode
 print('Server Online')
 
-clients = []	#these two match up
+# these two match up
+clients = []
 usernames = []
 
-
-#Broadcast Method
-#sends a message to all currently connected clients
-
+# Broadcast Method
+# Sends a message to all currently connected clients
 def broadcast(message):
 	for client in clients:
 		client.send(message)
 
-
-#Client Connection Handling Method
-#When a client connects to the server, recieve any messages and send them to all other clients including itself
-
+# Client Connection Handling Method
+# When a client connects to the server, recieve any messages and send them to all other clients including itself
 def handle(client):
 	while True:
 		try:
@@ -42,13 +36,11 @@ def handle(client):
 			broadcast(f'{username} has left the chat'.encode('ascii'))
 			break
 
-
-#Receive / Main method
-#combines all other methods into one function
-
+# Receive / Main Method
+# Combines all other methods into one function
 def receive():
 	while True:
-		#constantly running the accept method and if it finds anything it returns a client and address
+		# constantly running the accept method and if it finds anything it returns a client and address
 		client, address = server.accept() 
 		print(f"User has connected with IP and port {str(address)}")
 		
@@ -61,7 +53,7 @@ def receive():
 		broadcast(f'{username} has joined the server'.encode('ascii'))
 		client.send('You have connected to the server succesfully'.encode('ascii'))
 		
-		#we run one thread for each connected client because they all need to be handled simultaneously
+		# we run one thread for each connected client because they all need to be handled simultaneously
 		thread = threading.Thread(target=handle, args=(client,))
 		thread.start()
 
