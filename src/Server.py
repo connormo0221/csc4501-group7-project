@@ -1,13 +1,15 @@
 import threading
 import socket
 
+# TODO: add method to close server
+
 host = '127.0.0.1' # localhost 
-port = 31103 # don't use reserved ports 1-10,000
+port = 31103 # don't use reserved ports 1 - 10,000
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
 server.listen() # puts the server into listening mode
-print('Server Online')
+print('Server is now Online')
 
 # these two match up
 clients = []
@@ -24,7 +26,7 @@ def broadcast(message):
 def handle(client):
 	while True:
 		try:
-			#sets message to a recieved message, up to 1024 bytes
+			# sets message to a recieved message, up to 1024 bytes
 			message = client.recv(1024)
 			broadcast(message)
 		except:
@@ -33,7 +35,7 @@ def handle(client):
 			client.close()
 			username = usernames[index]
 			usernames.remove(username)
-			broadcast(f'{username} has left the chat'.encode('ascii'))
+			broadcast(f'{username} has left the chat'.encode('ascii')) # TODO: not working, fix (ngrok issue?)
 			break
 
 # Receive / Main Method
@@ -51,7 +53,7 @@ def receive():
 		
 		print(f'The username of the client is {username}!')
 		broadcast(f'{username} has joined the server'.encode('ascii'))
-		client.send('You have connected to the server succesfully'.encode('ascii'))
+		client.send('You have connected to the server succesfully'.encode('ascii')) # TODO: fix formatting; newline
 		
 		# we run one thread for each connected client because they all need to be handled simultaneously
 		thread = threading.Thread(target=handle, args=(client,))

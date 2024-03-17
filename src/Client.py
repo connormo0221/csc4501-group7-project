@@ -1,6 +1,8 @@
 import threading
 import socket
 
+# TODO: add method to close client
+
 # set client username
 username = input("Type in a username: ")
 
@@ -13,7 +15,7 @@ port = input("Type in the host port: ")
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((host, int(port)))
 
-# Recieve function for data from the server
+# Receive function for data from the server
 def receive():
 	while True:
 		try:
@@ -29,7 +31,7 @@ def receive():
 			break
 
 # Send messages to the server
-def write():
+def write(): # TODO: fix formatting; submitted messages are inserted between unsent messages
 	while True:
 		message = (f'{username}: {input("")}')
 		# constantly running user input function and as soon as enter is hit it sends a message and prompts for a new message
