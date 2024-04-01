@@ -6,7 +6,7 @@ import os
 # TODO: {username} left the chat is not working, need to fix (ngrok issue?)
 
 host = '127.0.0.1' # localhost 
-port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998
+port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998 [main req is port # > 10,000]
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
@@ -16,6 +16,7 @@ print('Server is online.')
 # Storing client and username info into lists; should be matching pairs
 clients = []
 usernames = []
+banlist = []
 
 # function Broadcast
 # Sends a message to all connected clients
@@ -29,8 +30,33 @@ def handle(client):
 	while True:
 		try:
 			# sets message to a recieved message, up to 1024 bytes
-			message = client.recv(1024)
-			broadcast(message)
+			cmd = message = client.recv(1024)
+
+			#checking if message is a command or not
+			if cmd.decode('ascii').startswith('KICK'):
+				if usernames[clients.index(client)] == 'admin': #checking if the client who sent this message is in the server's database as an admin
+					to_be_kicked = cmd.decode('ascii')[5:]
+					kick_user(to_be_kicked)
+					print(f'{to_be_kicked} was kicked by administrator')
+				else:
+					client.send('Command was refused!'.encode('ascii'))
+
+			if cmd.decode('ascii').startswith('BAN'):
+				if usernames[clients.index(client)] == 'admin':
+					to_be_banned = cmd.decode('ascii')[4:]
+					kick_user(to_be_banned)
+					with open('banlist.txt', 'a') as f: #we store banned users in a text file because we want it to persist
+						f.write(f'{to_be_banned}\n')
+				else:
+					client.send('Command was refused!'.encode('ascii'))
+
+			if cmd.decode('ascii').startswith('EXIT'):
+				if usernames[clients.index(client)] == 'admin':
+					pass #TODO: implement
+				else:
+					client.send('Command was refused!'.encode('ascii'))
+
+			broadcast(message) #only executes if none of the command code above executes
 		except:
 			index = clients.index(client)
 			clients.remove(client)
@@ -40,46 +66,36 @@ def handle(client):
 			broadcast(f'{username} has left the chat.'.encode('ascii'))
 			break
 
-# function Command
-# Adds server-side commands for closing the server, viewing connected clients, etc.
-def command():
-	while True:
-		command = input('')
-		if command == "/exit":
-			print('Disconnecting clients...')
-			for client in clients:
-				index = clients.index(client)
-				clients.remove(client)
-				client.close()
-				username = usernames[index]
-				usernames.remove(username)
-			print('Closing server...')
-			os._exit(1)
-		elif command == '/view':
-			print('Clients connected:')
-			for client in clients:
-				index = clients.index(client)
-				username = usernames[index]
-				print(f'{username} is connected.')
-		elif command == '/help':
-			print('Server commands: /exit, /view.')
-		else:
-			print('Invalid command. Use /help to display available commands.')
-
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
-		# command thread needed to catch text input
-		command_thread = threading.Thread(target=command)
-		command_thread.start()
-
 		# always running the accept method; if it finds something, return client & address
 		client, address = server.accept() 
 		print(f'User has connected with IP and port {str(address)}.')
 		
 		client.send('ID'.encode('ascii'))
 		username = client.recv(1024).decode('ascii')
+
+		with open('banlist.txt', 'r') as f:
+			bans = f.readlines()
+		
+		if username+'\n' in bans:
+			client.send('BAN'.encode('ascii'))
+			client.close()
+			continue
+
+
+		#checking if the user is attempting an Administrator login
+		if username == 'admin':
+			client.send('PASS'.encode('ascii')) #indicates we want the client to send their password
+			password = client.recv(1024).decode('ascii') #assuming the client sends a password back we need to check it
+			if password != 'Bouharb': #we should probably find a way to do this that isn't just plaintext in the code :/
+				print(f'User on port {str(address)} attempted administrator login unsuccesfully')
+				client.send('REFUSE'.encode('ascii'))
+				client.close()
+				continue #the while true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
+
 		usernames.append(username)
 		clients.append(client)
 		
@@ -89,5 +105,14 @@ def receive():
 		# we run one thread for each connected client because they all need to be handled simultaneously
 		handle_thread = threading.Thread(target=handle, args=(client,))
 		handle_thread.start()
+
+def kick_user(name):
+	if name in usernames:
+		name_index = usernames.index(name)
+		client_to_kick = clients[name_index]
+		clients.remove(client_to_kick)
+		client_to_kick.send('You were removed from the chat by an administrator'.encode('ascii'))
+		usernames.remove(name)
+		broadcast(f'{name} was removed by an adnministrator'.encode('ascii'))
 
 receive()
