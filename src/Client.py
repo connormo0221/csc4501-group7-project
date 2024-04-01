@@ -27,6 +27,8 @@ def receive():
 	while True:
 		global stop_thread
 		if stop_thread == True:
+			# [for debugging thread closure]
+			# print('breaking receive loop')
 			break
 		try:
 			message = client.recv(1024).decode('ascii')
@@ -43,7 +45,10 @@ def receive():
 					print('Connection refused: you have been banned by an administrator')
 					client.close()
 					stop_thread = True
-			if message == 'EXIT':
+			elif message == 'KICKED':
+				client.close()
+				stop_thread = True
+			elif message == 'EXIT':
 				print('The server administrator has closed the room')
 				stop_thread = True
 			else:
@@ -51,33 +56,42 @@ def receive():
 		except:
 			print('Data transfer stopped, closing connection.')
 			client.close()
-			os._exit(1)
+	# [for debugging thread closure]
+	# print('receive loop broken')
 
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
 def write():
 	# User input function is always running in order to catch input
 	while True:
-		if stop_thread == True:
+		if stop_thread:
+			# [for debugging thread closure]
+			#print('breaking write loop')
 			break
+		try:
+			message = (f'{username}: {input("")}')
 
-		message = (f'{username}: {input("")}')
+			if message[len(username)+2:].startswith('/'): #checks if the message being sent has a '/' at the start of it (indicates a command)
+				if (username == 'admin'):
+					#three commands KICK, BAN, EXIT
+					if message[len(username)+2:].startswith('/kick'):
+						print(f'kicking {message[len(username)+2+6:]} from the server')
+						client.send(f'KICK {message[len(username)+2+6:]}'.encode('ascii'))
+					elif message[len(username)+2:].startswith('/ban'):
+						print(f'Banning {message[len(username)+2+6:]} from the server')
+						client.send(f'BAN {message[len(username)+2+5:]}'.encode('ascii'))
+					elif message[len(username)+2:].startswith('/exit'):
+						print('sending exit command')
+						client.send(f'EXIT'.encode('ascii'))
+				else:
+					print('commands may only be executed by the administrator')
 
-		if message[len(username)+2:].startswith('/'): #checks if the message being sent has a '/' at the start of it (indicates a command)
-			if (username == 'admin'):
-				#three commands KICK, BAN, EXIT
-				command = message[len(username)+2]
-				if command.startswith('/kick'):
-					client.send(f'KICK {command[6:]}'.encode('ascii'))
-				elif command.startswith('/ban'):
-					client.send(f'BAN {command[5:]}'.encode('ascii'))
-				elif command.startswith('/exit'):
-					client.send('EXIT'.encode('ascii'))
 			else:
-				print('commands may only be executed by the administrator')
-
-		else:
-			client.send(message.encode('ascii'))
+				client.send(message.encode('ascii'))
+		except:
+			print('unable to send message')
+	# [for debugging thread closure]
+	# print('write loop broken')
 		
 # Both functions need their own thread since we need to be able to send & recieve messages simultaneously
 receive_thread = threading.Thread(target=receive)

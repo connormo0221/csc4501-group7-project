@@ -31,6 +31,8 @@ def handle(client):
 	while True:
 		global stop_thread
 		if stop_thread == True:
+			# [for debugging thread closure]
+			print('breaking handle loop')
 			break
 		try:
 			# sets message to a recieved message, up to 1024 bytes
@@ -45,7 +47,7 @@ def handle(client):
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			if cmd.decode('ascii').startswith('BAN'):
+			elif cmd.decode('ascii').startswith('BAN'):
 				if usernames[clients.index(client)] == 'admin':
 					to_be_banned = cmd.decode('ascii')[4:]
 					kick_user(to_be_banned)
@@ -54,13 +56,16 @@ def handle(client):
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			if cmd.decode('ascii') == ('EXIT'):
+			elif cmd.decode('ascii') == ('EXIT'):
 				if usernames[clients.index(client)] == 'admin':
 					exit_seq()
+					print('Closing server')
+					stop_thread = True
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			broadcast(message) #only executes if none of the command code above executes
+			else:
+				broadcast(message) #only executes if none of the command code above executes
 		except:
 			index = clients.index(client)
 			clients.remove(client)
@@ -69,67 +74,79 @@ def handle(client):
 			usernames.remove(username)
 			broadcast(f'{username} has left the chat.'.encode('ascii'))
 			break
+	# [for debugging thread closure]
+	print('handle loop broken succesfully')
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
 		if stop_thread == True:
+			# [for debugging thread closure]
+			print('breaking receive loop')
 			break
-		# always running the accept method; if it finds something, return client & address
-		client, address = server.accept() 
-		print(f'User has connected with IP and port {str(address)}.')
-		
-		client.send('ID'.encode('ascii'))
-		username = client.recv(1024).decode('ascii')
 
-		with open('banlist.txt', 'r') as f:
-			bans = f.readlines()
-		
-		if username+'\n' in bans:
-			client.send('BAN'.encode('ascii'))
-			client.close()
-			continue
+		try:
+			# always running the accept method; if it finds something, return client & address
+			client, address = server.accept() 
+			print(f'User has connected with IP and port {str(address)}.')
+			client.send('ID'.encode('ascii'))
+			username = client.recv(1024).decode('ascii')
 
-
-		#checking if the user is attempting an Administrator login
-		if username == 'admin':
-			client.send('PASS'.encode('ascii')) #indicates we want the client to send their password
-			password = client.recv(1024).decode('ascii') #assuming the client sends a password back we need to check it
-			if password != 'Bouharb': #we should probably find a way to do this that isn't just plaintext in the code :/
-				print(f'User on port {str(address)} attempted administrator login unsuccesfully')
-				client.send('REFUSE'.encode('ascii'))
+			with open('banlist.txt', 'r') as f:
+				bans = f.readlines()
+			
+			if username+'\n' in bans:
+				client.send('BAN'.encode('ascii'))
 				client.close()
-				continue #the while true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
+				continue
 
-		usernames.append(username)
-		clients.append(client)
-		
-		print(f'The username of the client is {username}.')
-		broadcast(f'{username} has joined the server.'.encode('ascii'))
 
-		# we run one thread for each connected client because they all need to be handled simultaneously
-		handle_thread = threading.Thread(target=handle, args=(client,))
-		handle_thread.start()
+			#checking if the user is attempting an Administrator login
+			if username == 'admin':
+				client.send('PASS'.encode('ascii')) #indicates we want the client to send their password
+				password = client.recv(1024).decode('ascii') #assuming the client sends a password back we need to check it
+				if password != 'Bouharb': #we should probably find a way to do this that isn't just plaintext in the code :/
+					print(f'User on {str(address)} attempted administrator login unsuccesfully')
+					client.send('REFUSE'.encode('ascii'))
+					client.close()
+					continue #the while true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
+
+			usernames.append(username)
+			clients.append(client)
+			
+			print(f'The username of the client is {username}.')
+			broadcast(f'{username} has joined the server.'.encode('ascii'))
+
+			# we run one thread for each connected client because they all need to be handled simultaneously
+			handle_thread = threading.Thread(target=handle, args=(client,))
+			handle_thread.start()
+		except:
+			if client:
+				client.send('there was an error establishing your conenction')
+				client.send('KICKED')
+	# [for debugging thread closure]
+	print('receive loop broken succesfully')
 
 def kick_user(name):
 	if name in usernames:
 		name_index = usernames.index(name)
 		client_to_kick = clients[name_index]
 		clients.remove(client_to_kick)
-		client_to_kick.send('You were removed from the chat by an administrator'.encode('ascii'))
 		usernames.remove(name)
+		client_to_kick.send('You were removed from the chat by an administrator'.encode('ascii'))
+		client_to_kick.send('KICKED'.encode('ascii'))
 		broadcast(f'{name} was removed by an adnministrator'.encode('ascii'))
 
 def exit_seq():
 	print('Initiating exit sequence:')
-	for client in clients:
-		client_index = clients.index(client)
-		client.send('EXIT')
-		clients.remove(client)
-		usernames.remove(client_index)
+	print(f'currently connected \n {usernames}')
+	while usernames:
+		print(f'removing {usernames[0]}')
+		client_to_kick = clients[0]
+		clients.remove(client_to_kick)
+		del usernames[0]
+		client_to_kick.send('EXIT'.encode('ascii'))
 	print('Users have been removed succesfully')
-	stop_thread = True
-	print('Closing server')
 
 receive()
