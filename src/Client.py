@@ -44,7 +44,7 @@ def receive():
 					client.close()
 					stop_thread = True
 			if message == 'EXIT':
-				print('The server has closed the connection')
+				print('The server administrator has closed the room')
 				stop_thread = True
 			else:
 				print(message)
@@ -72,7 +72,7 @@ def write():
 				elif command.startswith('/ban'):
 					client.send(f'BAN {command[5:]}'.encode('ascii'))
 				elif command.startswith('/exit'):
-					pass # TODO: implement
+					client.send('EXIT'.encode('ascii'))
 			else:
 				print('commands may only be executed by the administrator')
 

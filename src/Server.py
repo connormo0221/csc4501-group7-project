@@ -16,7 +16,8 @@ print('Server is online.')
 # Storing client and username info into lists; should be matching pairs
 clients = []
 usernames = []
-banlist = []
+
+stop_thread = False
 
 # function Broadcast
 # Sends a message to all connected clients
@@ -28,6 +29,9 @@ def broadcast(message):
 # When a client connects to the server, recieve messages from client & send them to all clients (including itself)
 def handle(client):
 	while True:
+		global stop_thread
+		if stop_thread == True:
+			break
 		try:
 			# sets message to a recieved message, up to 1024 bytes
 			cmd = message = client.recv(1024)
@@ -50,9 +54,9 @@ def handle(client):
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			if cmd.decode('ascii').startswith('EXIT'):
+			if cmd.decode('ascii') == ('EXIT'):
 				if usernames[clients.index(client)] == 'admin':
-					pass #TODO: implement
+					exit_seq()
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
@@ -70,6 +74,8 @@ def handle(client):
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
+		if stop_thread == True:
+			break
 		# always running the accept method; if it finds something, return client & address
 		client, address = server.accept() 
 		print(f'User has connected with IP and port {str(address)}.')
@@ -114,5 +120,16 @@ def kick_user(name):
 		client_to_kick.send('You were removed from the chat by an administrator'.encode('ascii'))
 		usernames.remove(name)
 		broadcast(f'{name} was removed by an adnministrator'.encode('ascii'))
+
+def exit_seq():
+	print('Initiating exit sequence:')
+	for client in clients:
+		client_index = clients.index(client)
+		client.send('EXIT')
+		clients.remove(client)
+		usernames.remove(client_index)
+	print('Users have been removed succesfully')
+	stop_thread = True
+	print('Closing server')
 
 receive()
