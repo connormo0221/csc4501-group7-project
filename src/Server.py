@@ -2,13 +2,15 @@ import threading
 import socket
 import os
 
-# TODO: {username} left the chat is not working, need to fix (ngrok issue?)
+# TODO: {username} left the chat is not working, need to fix
+# related to above: clients & usernames are not being removed when they disconnect
 # TODO: remove plaintext admin password, replace w/ secure version
+# TODO: add support for multiple administrator accounts
 # TODO: optimize the admin check when parsing commands
 # TODO: fix exit_seq() breaking the handle loop but not the receive loop
 
 host = '127.0.0.1' # localhost 
-port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998 [main req is port # > 10,000]
+port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req. is port # > 10,000]
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
@@ -64,6 +66,8 @@ def handle(client):
 					stop_thread = True
 				else:
 					client.send('Command was refused!'.encode('ascii'))
+			elif cmd.decode('ascii') == ('LIST'):
+				client.send(f'Users currently connected: \n {usernames}'.encode('ascii'))
 			else:
 				broadcast(message) # only executes if none of the command code above executes
 		except:
@@ -73,7 +77,7 @@ def handle(client):
 			username = usernames[index]
 			usernames.remove(username)
 			broadcast(f'{username} has left the chat.'.encode('ascii'))
-			break
+			stop_thread == True
 
 	# for debugging thread closure:
 	print('DEBUG_SERVER: handle loop broken succesfully')
@@ -82,8 +86,7 @@ def handle(client):
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
-		global stop_thread 
-		stop_thread = False
+		global stop_thread
 
 		if stop_thread == True:
 			# for debugging thread closure:
@@ -93,6 +96,8 @@ def receive():
 		try:
 			# always running the accept method; if it finds something, return client & address
 			client, address = server.accept() 
+			#if stop_thread == True: # skip to next loop & break
+			#	continue
 			print(f'User has connected with IP and port {str(address)}.')
 			client.send('ID'.encode('ascii'))
 			username = client.recv(1024).decode('ascii')
@@ -109,7 +114,7 @@ def receive():
 			if username == 'admin':
 				client.send('PASS'.encode('ascii')) # indicates we want the client to send their password
 				password = client.recv(1024).decode('ascii') # assuming the client sends a password back we need to check it
-				if password != 'Bouharb':
+				if password != 'Bou-Harb':
 					print(f'User with IP and port {str(address)} failed to login as an administrator.')
 					client.send('REFUSE'.encode('ascii'))
 					client.close()
@@ -124,15 +129,11 @@ def receive():
 			# we run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target=handle, args=(client,))
 			handle_thread.start()
-
-			if handle_thread.is_alive() == False:
-				stop_thread = True
-				break
 		
 		except:
 			if client:
-				client.send('There was an error establishing your connection.') # invalid code, gives "TypeError: a bytes-like object is required, not 'str'"
-				client.send('KICKED')
+				client.send('There was an error establishing your connection.'.encode('ascii'))
+				client.send('KICKED'.encode('ascii'))
 	
 	# for debugging thread closure:
 	print('DEBUG_SERVER: receive loop broken succesfully')
@@ -157,6 +158,7 @@ def exit_seq():
 		del usernames[0]
 		client_to_kick.send('CLOSE'.encode('ascii'))
 	print('Users have been removed succesfully.')
+	#server.connect((host, int(port))) # connect to server locally in order to stop the receive() thread
 
 receive()
-os._exit(0)
+os._exit(0) # close program when all threads are finished
