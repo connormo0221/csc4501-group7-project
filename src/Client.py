@@ -1,6 +1,7 @@
 import threading
 import socket
 import os
+import ssl
 
 # TODO: add proper type checking for host & port variables
 # TODO: add error handling to failed connections
@@ -15,8 +16,12 @@ if username == 'admin':
 host = input('Type in the host address: ')
 port = input('Type in the host port: ')
 
+# Implement basic SSL protection with default context
+context = ssl.create_default_context()
+
 # Connect the client to a host IP & port number; dependent on previous user input
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client_basic = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client = context.wrap_socket(client_basic, server_hostname=host)
 client.connect((host, int(port)))
 
 stop_thread = False

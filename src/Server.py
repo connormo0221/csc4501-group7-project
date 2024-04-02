@@ -1,6 +1,7 @@
 import threading
 import socket
 import os
+import ssl
 
 # TODO: add method to close server (that actually works and doesn't throw an exception)
 # TODO: {username} left the chat is not working, need to fix (ngrok issue?)
@@ -8,10 +9,18 @@ import os
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998 [main req is port # > 10,000]
 
+# Implement basic SSL protection with default context
+context = ssl.create_default_context()
+
+
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
 server.listen() # Puts the server into listening mode
 print('Server is online.')
+
+# Make socket secure
+secure_server = context.wrap_socket(server, server_side=True_)
 
 # Storing client and username info into lists; should be matching pairs
 clients = []
@@ -77,7 +86,7 @@ def receive():
 		if stop_thread == True:
 			break
 		# always running the accept method; if it finds something, return client & address
-		client, address = server.accept() 
+		client, address = secure_server.accept() 
 		print(f'User has connected with IP and port {str(address)}.')
 		
 		client.send('ID'.encode('ascii'))
