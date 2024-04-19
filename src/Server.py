@@ -25,6 +25,19 @@ def broadcast(message):
 	for client in clients:
 		client.send(message)
 
+def whisper(sender, targetName, message):
+	senderName = usernames[clients.index(sender)]
+	target = clients[usernames.index(targetName)]
+	tmp = ' '.join(message)
+	final_message = (f'{senderName} whispers: {tmp}')
+	target.send(final_message.encode('ascii'))
+
+def isAdmin(client):
+	if usernames[clients.index(client)] == 'admin':
+		return True
+	else:
+		return False
+
 # function Client Connection Handler
 # When a client connects to the server, recieve messages from client & send them to all clients (including itself)
 def handle(client):
@@ -34,13 +47,16 @@ def handle(client):
 			# [for debugging thread closure]
 			print('breaking handle loop')
 			break
+			
 		try:
 			# sets message to a recieved message, up to 1024 bytes
 			cmd = message = client.recv(1024)
 
 			#checking if message is a command or not
+   
+			# ADMIN COMMANDS #
 			if cmd.decode('ascii').startswith('KICK'):
-				if usernames[clients.index(client)] == 'admin': #checking if the client who sent this message is in the server's database as an admin
+				if isAdmin(client): #checking if the client who sent this message is in the server's database as an admin
 					to_be_kicked = cmd.decode('ascii')[5:]
 					kick_user(to_be_kicked)
 					print(f'{to_be_kicked} was kicked by administrator')
@@ -48,7 +64,7 @@ def handle(client):
 					client.send('Command was refused!'.encode('ascii'))
 
 			elif cmd.decode('ascii').startswith('BAN'):
-				if usernames[clients.index(client)] == 'admin':
+				if isAdmin(client):
 					to_be_banned = cmd.decode('ascii')[4:]
 					kick_user(to_be_banned)
 					with open('banlist.txt', 'a') as f: #we store banned users in a text file because we want it to persist
@@ -57,12 +73,20 @@ def handle(client):
 					client.send('Command was refused!'.encode('ascii'))
 
 			elif cmd.decode('ascii') == ('EXIT'):
-				if usernames[clients.index(client)] == 'admin':
+				if isAdmin(client):
 					exit_seq()
 					print('Closing server')
 					stop_thread = True
 				else:
 					client.send('Command was refused!'.encode('ascii'))
+			
+			# CLIENT COMMANDS #
+			elif cmd.decode('ascii').startswith('WHISPER'):
+				content = (cmd.decode('ascii')[8:]).split()
+				target = content[0]
+				message = (content[1:])
+				sender = client
+				whisper(sender, target, message)
 
 			else:
 				broadcast(message) #only executes if none of the command code above executes
@@ -77,6 +101,9 @@ def handle(client):
 	# [for debugging thread closure]
 	print('handle loop broken succesfully')
 
+def handler(signum, frame):
+	pass
+
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
@@ -85,6 +112,7 @@ def receive():
 			# [for debugging thread closure]
 			print('breaking receive loop')
 			break
+		
 
 		try:
 			# always running the accept method; if it finds something, return client & address
@@ -122,9 +150,7 @@ def receive():
 			handle_thread = threading.Thread(target=handle, args=(client,))
 			handle_thread.start()
 		except:
-			if client:
-				client.send('there was an error establishing your conenction')
-				client.send('KICKED')
+			pass
 	# [for debugging thread closure]
 	print('receive loop broken succesfully')
 

@@ -12,8 +12,8 @@ if username == 'admin':
 	password = input('Type in a password: ')
 
 # Allow client to set server host IP & port number
-host = input('Type in the host address: ')
-port = input('Type in the host port: ')
+host = '127.0.0.1'
+port = 29170
 
 # Connect the client to a host IP & port number; dependent on previous user input
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -69,25 +69,30 @@ def write():
 			#print('breaking write loop')
 			break
 		try:
-			message = (f'{username}: {input("")}')
+			content = input("")
+			isAdmin = False
+			if username == 'admin':
+				isAdmin = True
 
-			if message[len(username)+2:].startswith('/'): #checks if the message being sent has a '/' at the start of it (indicates a command)
-				if (username == 'admin'):
-					#three commands KICK, BAN, EXIT
-					if message[len(username)+2:].startswith('/kick'):
-						print(f'kicking {message[len(username)+2+6:]} from the server')
-						client.send(f'KICK {message[len(username)+2+6:]}'.encode('ascii'))
-					elif message[len(username)+2:].startswith('/ban'):
-						print(f'Banning {message[len(username)+2+6:]} from the server')
-						client.send(f'BAN {message[len(username)+2+5:]}'.encode('ascii'))
-					elif message[len(username)+2:].startswith('/exit'):
-						print('sending exit command')
-						client.send(f'EXIT'.encode('ascii'))
+			if content.startswith('/'): #indicates a command
+				if (content.startswith('/kick') & isAdmin):
+					print(f'kicking {content[6:]}')
+					client.send(f'KICK {content[6:]}'.encode('ascii'))
+				elif (content.startswith('/ban') & isAdmin):
+					print(f'banning {content[5:]}')
+					client.send(f'BAN {content[5:]}'.encode('ascii'))
+				elif (content.startswith('/exit') & isAdmin):
+					print('Exiting')
+					client.send('EXIT')
+				elif(content.startswith('/w')):
+					print(f'whispering')
+					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
 				else:
-					print('commands may only be executed by the administrator')
-
+					print('invalid command')
 			else:
+				message = (f'{username}: {content}')
 				client.send(message.encode('ascii'))
+
 		except:
 			print('unable to send message')
 	# [for debugging thread closure]
