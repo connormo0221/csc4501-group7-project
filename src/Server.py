@@ -55,7 +55,7 @@ def handle(client):
 			#checking if message is a command or not
    
 			# ADMIN COMMANDS #
-			if cmd.decode('ascii').startswith('KICK'):
+			if cmd.decode('ascii').startswith('KICK'): # KICKS A USER FROM THE SERVER #
 				if isAdmin(client): #checking if the client who sent this message is in the server's database as an admin
 					to_be_kicked = cmd.decode('ascii')[5:]
 					kick_user(to_be_kicked)
@@ -63,7 +63,7 @@ def handle(client):
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			elif cmd.decode('ascii').startswith('BAN'):
+			elif cmd.decode('ascii').startswith('BAN'): # BANS A USER FROM THE SERVER #
 				if isAdmin(client):
 					to_be_banned = cmd.decode('ascii')[4:]
 					kick_user(to_be_banned)
@@ -72,24 +72,25 @@ def handle(client):
 				else:
 					client.send('Command was refused!'.encode('ascii'))
 
-			elif cmd.decode('ascii') == ('EXIT'):
-				if isAdmin(client):
-					exit_seq()
-					print('Closing server')
-					stop_thread = True
-				else:
-					client.send('Command was refused!'.encode('ascii'))
-			
 			# CLIENT COMMANDS #
-			elif cmd.decode('ascii').startswith('WHISPER'):
+			elif cmd.decode('ascii') == ('EXIT'):
+				exit_seq(client)
+				stop_thread = True
+
+			elif cmd.decode('ascii').startswith('WHISPER'): # MESSAGE A SINGLE PERSON #
 				content = (cmd.decode('ascii')[8:]).split()
 				target = content[0]
 				message = (content[1:])
 				sender = client
 				whisper(sender, target, message)
+			
+			elif cmd.decode('ascii').starswith('ENUMERATE'): # LIST ALL CONNECTED USERS #
+				client.send('Connected Users:\n').encode('ascii')
+				for username in usernames:
+					client.send(f'{username}\n').encode('ascii')
 
 			else:
-				broadcast(message) #only executes if none of the command code above executes
+				broadcast(message.encode('ascii')) #only executes if none of the command code above executes
 		except:
 			index = clients.index(client)
 			clients.remove(client)
@@ -108,12 +109,6 @@ def handler(signum, frame):
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
 	while True:
-		if stop_thread == True:
-			# [for debugging thread closure]
-			print('breaking receive loop')
-			break
-		
-
 		try:
 			# always running the accept method; if it finds something, return client & address
 			client, address = server.accept() 
@@ -150,9 +145,7 @@ def receive():
 			handle_thread = threading.Thread(target=handle, args=(client,))
 			handle_thread.start()
 		except:
-			pass
-	# [for debugging thread closure]
-	print('receive loop broken succesfully')
+			print('There was an error recieving client data')
 
 def kick_user(name):
 	if name in usernames:
@@ -164,15 +157,12 @@ def kick_user(name):
 		client_to_kick.send('KICKED'.encode('ascii'))
 		broadcast(f'{name} was removed by an adnministrator'.encode('ascii'))
 
-def exit_seq():
-	print('Initiating exit sequence:')
-	print(f'currently connected \n {usernames}')
-	while usernames:
-		print(f'removing {usernames[0]}')
-		client_to_kick = clients[0]
-		clients.remove(client_to_kick)
-		del usernames[0]
-		client_to_kick.send('EXIT'.encode('ascii'))
-	print('Users have been removed succesfully')
+def exit_seq(client):
+	clientidx = clients.index(client)
+	name = usernames[clientidx]
+	clients.remove(client)
+	usernames.remove(name)
+	broadcast(f'{name} has left the server'.encode('ascii'))
+	client.send('EXIT'.encode('ascii'))
 
 receive()

@@ -49,7 +49,7 @@ def receive():
 				client.close()
 				stop_thread = True
 			elif message == 'EXIT':
-				print('The server administrator has closed the room')
+				print('You have left the room succesfully')
 				stop_thread = True
 			else:
 				print(message)
@@ -81,12 +81,14 @@ def write():
 				elif (content.startswith('/ban') & isAdmin):
 					print(f'banning {content[5:]}')
 					client.send(f'BAN {content[5:]}'.encode('ascii'))
-				elif (content.startswith('/exit') & isAdmin):
+				elif (content.startswith('/exit')):
 					print('Exiting')
 					client.send('EXIT')
 				elif(content.startswith('/w')):
 					print(f'whispering')
 					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
+				elif(content.startswith('/list')):
+					client.send('ENUMERATE')
 				else:
 					print('invalid command')
 			else:
