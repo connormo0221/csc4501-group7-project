@@ -82,28 +82,42 @@ def write():
 					print(helpPG)
 					if isAdmin:
 						print(adminPG)
+				
 				elif (content.startswith('/kick') & isAdmin):
 					print(f'kicking {content[6:]}')
 					client.send(f'KICK {content[6:]}'.encode('ascii'))
+
 				elif (content.startswith('/ban') & isAdmin):
 					print(f'banning {content[5:]}')
 					client.send(f'BAN {content[5:]}'.encode('ascii'))
+
+				elif (content.startswith('/unban') & isAdmin):
+					print(f'unbanning {content[7:]}')
+					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
+
 				elif (content.startswith('/make') & isAdmin):
-					pass # TODO: IMPLEMENT
+					client.send(f'MAKE {content[6:]}')
+
 				elif (content.startswith('/close') & isAdmin):
-					pass # TODO: IMPLEMENT
+					client.send(f'CLOSE {content[7:]}')
+
 				elif (content.startswith('/exit')):
 					print('Exiting')
 					client.send('EXIT')
-				elif (content.startswith('/join')):
-					pass # TODO: IMPLEMENT
+				
 				elif(content.startswith('/w')):
 					print(f'whispering')
 					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
+
 				elif(content.startswith('/online')):
 					client.send('USERS')
+
 				elif(content.startswith('/channels')):
 					client.send('CHANNELS')
+
+				elif (content.startswith('/join')):
+					client.send(f'JOIN {content[6:]}')
+					
 				else:
 					print('invalid command')
 			else:
