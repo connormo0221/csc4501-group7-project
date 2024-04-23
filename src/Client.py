@@ -21,6 +21,9 @@ client.connect((host, int(port)))
 
 stop_thread = False
 
+helpPG = 'Valid commands are as follows' #TODO: Write these two
+adminPG = 'ADMINISTRATOR COMMANDS:'
+
 # function Receive
 # Receives & decodes data from the server; if data can't be decoded, client disconnects
 def receive():
@@ -75,20 +78,32 @@ def write():
 				isAdmin = True
 
 			if content.startswith('/'): #indicates a command
-				if (content.startswith('/kick') & isAdmin):
+				if (content.startswith('/help')):
+					print(helpPG)
+					if isAdmin:
+						print(adminPG)
+				elif (content.startswith('/kick') & isAdmin):
 					print(f'kicking {content[6:]}')
 					client.send(f'KICK {content[6:]}'.encode('ascii'))
 				elif (content.startswith('/ban') & isAdmin):
 					print(f'banning {content[5:]}')
 					client.send(f'BAN {content[5:]}'.encode('ascii'))
+				elif (content.startswith('/make') & isAdmin):
+					pass # TODO: IMPLEMENT
+				elif (content.startswith('/close') & isAdmin):
+					pass # TODO: IMPLEMENT
 				elif (content.startswith('/exit')):
 					print('Exiting')
 					client.send('EXIT')
+				elif (content.startswith('/join')):
+					pass # TODO: IMPLEMENT
 				elif(content.startswith('/w')):
 					print(f'whispering')
 					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
-				elif(content.startswith('/list')):
-					client.send('ENUMERATE')
+				elif(content.startswith('/online')):
+					client.send('USERS')
+				elif(content.startswith('/channels')):
+					client.send('CHANNELS')
 				else:
 					print('invalid command')
 			else:

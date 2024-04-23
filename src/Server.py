@@ -16,14 +16,18 @@ print('Server is online.')
 # Storing client and username info into lists; should be matching pairs
 clients = []
 usernames = []
+channel = []
+strikes = [] # THIS IS GOING TO BE FOR AN AUTOMATED BOUNCER THAT KICKS USERS FOR SPAM (AND MAYBE BANS THEM)
+flagged = [] # THIS IS GOING TO BE FOR AN AUTOMATED BOUNCER THAT KICKS USERS FOR SPAM (AND MAYBE BANS THEM)
 
 stop_thread = False
 
 # function Broadcast
-# Sends a message to all connected clients
-def broadcast(message):
+# Sends a message to all clients in the same channel as the sender
+def broadcast(message, sender):
 	for client in clients:
-		client.send(message)
+		if channel[client] == channel[sender]:
+			client.send(message)
 
 def whisper(sender, targetName, message):
 	senderName = usernames[clients.index(sender)]
@@ -37,6 +41,26 @@ def isAdmin(client):
 		return True
 	else:
 		return False
+
+def join_channel(client, channel_name):
+	with open('channel_list.txt', 'r') as c:
+		valid_channels = c.readlines()
+
+	if channel_name in valid_channels:
+		clientIDX = clients[client]
+		username = usernames[clientIDX]
+		channel[clientIDX] = channel_name
+		broadcast(f"{username} has joined {channel_name}")
+		client.send(f'You have joined {channel_name} succesfully'.encode('ascii'))
+	else:
+		client.send('Could not join, channel does not exist'.encode('ascii'))
+
+def create_channel(channel_name):
+	with open('channel_list.txt', 'a') as f: #we store channels in a text file because we want it to persist
+		f.write(f'{channel_name}\n')
+
+def close_channel(channel_name):
+	pass #TODO: IMPLEMENT
 
 # function Client Connection Handler
 # When a client connects to the server, recieve messages from client & send them to all clients (including itself)
@@ -71,6 +95,26 @@ def handle(client):
 						f.write(f'{to_be_banned}\n')
 				else:
 					client.send('Command was refused!'.encode('ascii'))
+			
+			elif cmd.decode('ascii').startswith('MAKE'): # MAKES A NEW SERVER CHANNEL #
+				if isAdmin(client):
+					new_channel = cmd.decode('ascii')[5:]
+					if new_channel.startswith('#'):
+						create_channel(new_channel)
+					else:
+						client.send('incorrect channel name format, use /help to display valid commands'.encode('ascii'))
+				else:
+					client.send('Command was refused'.encode('ascii'))
+			
+			elif cmd.decode('ascii').startswith('CLOSE'): # CLOSES A SERVER CHANNEL #
+				if isAdmin(client):
+					new_channel = cmd.decode('ascii')[5:]
+					if new_channel.startswith('#'):
+						close_channel(new_channel)
+					else:
+						client.send('incorrect channel name format, use /help to display valid commands'.encode('ascii'))
+				else:
+					client.send('Command was refused'.encode('ascii'))
 
 			# CLIENT COMMANDS #
 			elif cmd.decode('ascii') == ('EXIT'):
@@ -84,30 +128,53 @@ def handle(client):
 				sender = client
 				whisper(sender, target, message)
 			
-			elif cmd.decode('ascii').starswith('ENUMERATE'): # LIST ALL CONNECTED USERS #
-				client.send('Connected Users:\n').encode('ascii')
+			elif cmd.decode('ascii').starswith('USERS'): # LIST ALL CONNECTED USERS #
+				client.send('Connected Users:\n'.encode('ascii'))
 				for username in usernames:
 					client.send(f'{username}\n').encode('ascii')
+			
+			elif cmd.decode('ascii').starswith('CHANNELS'): # LIST ALL CONNECTED USERS #
+				client.send('Active channels:\n'.encode('ascii'))
+				with open('channel_list.txt', 'r') as c:
+					valid_channels = c.readlines()
+				tmp = '\n'.join(valid_channels)
+				client.send(tmp.encode('ascii'))
+				
+			
+			elif cmd.decode('ascii').startswith('JOIN'):
+				chanName = cmd.decode('ascii')[5:]
+				if chanName.startswith('#'):
+					join_channel(client, chanName)
+				else:
+					client.send('incorrect channel name format, use /help to display valid commands')
+
 
 			else:
-				broadcast(message.encode('ascii')) #only executes if none of the command code above executes
+				broadcast(message.encode('ascii'), client) #only executes if none of the command code above executes
 		except:
 			index = clients.index(client)
 			clients.remove(client)
 			client.close()
 			username = usernames[index]
 			usernames.remove(username)
-			broadcast(f'{username} has left the chat.'.encode('ascii'))
+			broadcast(f'{username} has left the chat.'.encode('ascii'), client)
 			break
 	# [for debugging thread closure]
 	print('handle loop broken succesfully')
 
-def handler(signum, frame):
-	pass
+def bouncer():
+	while True:
+		for i in flagged:
+			if i:
+				kick_user(clients[i])
+		
+
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
+	bouncer_thread = threading.Thread(bouncer, daemon = True)
+	bouncer_thread.start()
 	while True:
 		try:
 			# always running the accept method; if it finds something, return client & address
@@ -137,9 +204,12 @@ def receive():
 
 			usernames.append(username)
 			clients.append(client)
+			channel.append('#general') # user will join in the general chat initially
+			strikes.append(0) # user will start with no strikes
+			flagged.append(False) # users will not be flagged initially
 			
 			print(f'The username of the client is {username}.')
-			broadcast(f'{username} has joined the server.'.encode('ascii'))
+			broadcast(f'{username} has joined the server.'.encode('ascii'), client)
 
 			# we run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target=handle, args=(client,))
@@ -153,16 +223,22 @@ def kick_user(name):
 		client_to_kick = clients[name_index]
 		clients.remove(client_to_kick)
 		usernames.remove(name)
-		client_to_kick.send('You were removed from the chat by an administrator'.encode('ascii'))
+		channel.remove[name_index]
+		strikes.remove[name_index]
+		flagged.remove[name_index]
+		client_to_kick.send('You were removed from the chat'.encode('ascii'))
 		client_to_kick.send('KICKED'.encode('ascii'))
-		broadcast(f'{name} was removed by an adnministrator'.encode('ascii'))
+		broadcast(f'{name} was removed from the chat'.encode('ascii'), client_to_kick) # TODO: FIX THIS, IT WILL BROADCAST THIS MESSAGE TO NOBODY
 
 def exit_seq(client):
 	clientidx = clients.index(client)
 	name = usernames[clientidx]
 	clients.remove(client)
 	usernames.remove(name)
-	broadcast(f'{name} has left the server'.encode('ascii'))
+	channel.remove[clientidx]
+	strikes.remove[clientidx]
+	flagged.remove[clientidx]
+	broadcast(f'{name} has left the server'.encode('ascii'), client) # TODO: FIX THIS, IT WILL BROADCAST THIS MESSAGE TO NOBODY
 	client.send('EXIT'.encode('ascii'))
 
 receive()
