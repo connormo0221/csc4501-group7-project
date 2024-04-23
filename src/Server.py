@@ -25,7 +25,8 @@ stop_thread = False
 # Sends a message to all clients in the same channel as the sender
 def broadcast(message, sender_channel):
 	for client in clients:
-		if channel[client] == sender_channel:
+		clientidx = clients.index(client)
+		if channel[clientidx] == sender_channel:
 			client.send(message)
 
 #helper function to check if client is actually an admin when sending admin commands
@@ -223,17 +224,17 @@ def handle(client):
 				whisper(sender, target, message)
 			
 			# LIST ALL CONNECTED USERS #
-			elif cmd.decode('ascii').starswith('USERS'):
-				client.send('Connected Users:\n'.encode('ascii'))
+			elif cmd.decode('ascii').startswith('USERS'):
+				client.send('Connected Users:'.encode('ascii'))
 				for username in usernames:
-					client.send(f'{username}\n').encode('ascii')
+					client.send(f'{username}'.encode('ascii'))
 			
 			# LIST ALL ACTIVE CHANNELS #
-			elif cmd.decode('ascii').starswith('CHANNELS'):
-				client.send('Active channels:\n'.encode('ascii'))
+			elif cmd.decode('ascii').startswith('CHANNELS'):
+				client.send('Active channels:'.encode('ascii'))
 				with open('channel_list.txt', 'r') as c:
 					valid_channels = c.readlines()
-				tmp = '\n'.join(valid_channels)
+				tmp = ''.join(valid_channels)
 				client.send(tmp.encode('ascii'))
 				
 			# JOIN A CHANNEL #
@@ -256,7 +257,7 @@ def handle(client):
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
-	bouncer_thread = threading.Thread(bouncer, daemon = True)
+	bouncer_thread = threading.Thread(target = bouncer, daemon = True)
 	bouncer_thread.start()
 
 	while True:

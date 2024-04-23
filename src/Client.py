@@ -96,27 +96,27 @@ def write():
 					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
 
 				elif (content.startswith('/make') & isAdmin):
-					client.send(f'MAKE {content[6:]}')
+					client.send(f'MAKE {content[6:]}'.encode('ascii'))
 
 				elif (content.startswith('/close') & isAdmin):
-					client.send(f'CLOSE {content[7:]}')
+					client.send(f'CLOSE {content[7:]}'.encode('ascii'))
 
 				elif (content.startswith('/exit')):
 					print('Exiting')
-					client.send('EXIT')
+					client.send('EXIT'.encode('ascii'))
 				
 				elif(content.startswith('/w')):
 					print(f'whispering')
 					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
 
 				elif(content.startswith('/online')):
-					client.send('USERS')
+					client.send('USERS'.encode('ascii'))
 
 				elif(content.startswith('/channels')):
-					client.send('CHANNELS')
+					client.send('CHANNELS'.encode('ascii'))
 
 				elif (content.startswith('/join')):
-					client.send(f'JOIN {content[6:]}')
+					client.send(f'JOIN {content[6:]}'.encode('ascii'))
 					
 				else:
 					print('invalid command')
