@@ -2,10 +2,13 @@ import threading
 import socket
 import os
 
-# TODO: add method to close server (that actually works and doesn't throw an exception)
+# TODO: check that all features are working as intended
+# TODO: check that common errors are handled properly
+# TODO: add method for admins to manually shut down the server (force-close the server window?)
+# TODO: prevent admins from removing the #general channel
 
 host = '127.0.0.1' # localhost 
-port = 29170 # Make sure to use an unassigned port number, best(?) range is 29170 to 29998 [main req is port # > 10,000]
+port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
 
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
@@ -24,8 +27,8 @@ stop_thread = False
 # Sends a message to all clients in the same channel as the sender
 def broadcast(message, sender_channel):
 	for client in clients:
-		clientidx = clients.index(client)
-		if channel[clientidx] == sender_channel:
+		client_index = clients.index(client)
+		if channel[client_index] == sender_channel:
 			client.send(message)
 
 # Checks if a client has administrator privileges
@@ -139,6 +142,7 @@ def join_channel(client, channel_name):
 	else:
 		client.send('ERROR: Channel does not exist.'.encode('ascii'))
 
+# Send request for file transfer to another client
 def transfer_request(hostname, clientname, filename):
 	client = clients[usernames.index(clientname)]
 	client.send(f'FTP_REQ {hostname} {filename}')
@@ -148,10 +152,11 @@ def transfer_request(hostname, clientname, filename):
 	else:
 		return False
 
+# Receive a file from the sender's computer
 def intermediate_file_acc(client):
-	client.send('FTP CONF'.encode('ascii'))
+	client.send('FTP_CONF'.encode('ascii'))
 	file_name = client.recv(1024).decode()
-	file_size = client.recv(1024).decode() # just here if we decide to implement a progress bar
+	#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 	file = open(file_name, 'wb')
 	file_bytes = b""
 	done = False
@@ -164,6 +169,7 @@ def intermediate_file_acc(client):
 	file.write(file_bytes)
 	file.close()
 
+# Send a file from the host computer
 def transfer_file(filename, target):
 	f = open(filename, 'rb')
 	f_size = os.path.getsize(filename)
@@ -175,24 +181,25 @@ def transfer_file(filename, target):
 	client.send(b"<END>")
 	f.close()
 
+# Remove a file from the host computer
 def rm_local(filename):
 	if os.path.exists(filename):
 		os.remove(filename)
 	else:
-		print(f'file deletion was attempted on filename [{filename}] but no such file exists')
+		print(f'ERROR: File deletion was attempted on filename [{filename}] but no such file exists.')
 
 # function Client Connection Handler
-# When a client connects to the server, recieve messages from client & send them to all clients (including itself)
+# When a client connects to the server, receive messages from client & send them to all clients (including itself)
 def handle(client):
 	while True:
 		global stop_thread
 		if stop_thread == True:
-			# [for debugging thread closure]
-			print('breaking handle loop')
+			# Use the following line for debugging thread closure
+			#print('DEBUG_SERVER: Breaking handle() loop.')
 			break
 			
 		try:
-			# Sets message to a recieved message, up to 1024 bytes
+			# Sets message to a received message, up to 1024 bytes
 			cmd = message = client.recv(1024)
    
 			# Check using keywords if a message is a command
@@ -269,8 +276,7 @@ def handle(client):
 				else:
 					client.send('ERROR: Incorrect channel name format, use /help to display valid commands.'.encode('ascii'))
 					
-			# USER IS REQUESTING TO TRANSFER A FILE TO ANOTHER USER #
-			elif cmd.decode('ascii').startswith('REQ'):
+			elif cmd.decode('ascii').startswith('REQ'): # REQUEST FILE TRANSFER TO ANOTHER USER
 				content = (cmd.decode('ascii')[4:]).split
 				c = content.split()
 				target = c[0]
@@ -282,7 +288,7 @@ def handle(client):
 					transfer_file(filename, target)
 					rm_local(filename)
 				else:
-					client.send('FTP DENY')
+					client.send('FTP_DENY')
 					rm_local(filename)
 
 			else: # Only executes if no commands were used
@@ -291,7 +297,9 @@ def handle(client):
 				broadcast(message.encode('ascii'), curr_channel)
 		except:
 			exit_seq(client) # Start exit sequence if an exception occurs
-			break		
+			break
+	# Use the following line for debugging thread closure
+	#print('DEBUG_SERVER: Broke handle() loop successfully.')
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
@@ -316,11 +324,11 @@ def receive():
 				continue
 
 			# Checking if the user is attempting to login as an administrator
-			if username == 'admin':
+			if username == 'admin': # Change this if we decide to add support for multiple admins
 				client.send('PASS'.encode('ascii')) # Indicates we want the client to send their password
 				password = client.recv(1024).decode('ascii') # Assuming the client sends a password back we need to check it
 				if password != 'Bouharb': # TODO: Remove plaintext admin password
-					print(f'User on {str(address)} attempted administrator login unsuccesfully')
+					print(f'User at {str(address)} attempted to login as administrator unsuccesfully.')
 					client.send('REFUSE'.encode('ascii'))
 					client.close()
 					continue # The while-true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
@@ -334,9 +342,9 @@ def receive():
 			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general')
 
 			# We run one thread for each connected client because they all need to be handled simultaneously
-			handle_thread = threading.Thread(target=handle, args=(client,))
+			handle_thread = threading.Thread(target = handle, args = (client,))
 			handle_thread.start()
 		except:
-			print('There was an error recieving client data')
+			print('ERROR: Failed to receive client data.')
 
 receive()

@@ -2,27 +2,29 @@ import threading
 import socket
 import os
 
-# TODO: add proper type checking for host & port variables
-# TODO: add error handling to failed connections
-# TODO: fix formatting; submitted messages are inserted between unsent messages
+# TODO: check that all features are working as intended
+# TODO: check that common errors are handled properly
+# TODO: add method to automatically close the client window upon exiting the server (through /exit or errors)
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
 if username == 'admin':
 	password = input('Type in a password: ')
 
-# Allow client to set server host IP & port number
+# Server host IP & port number manually set to localhost for this project
 host = '127.0.0.1'
 port = 29170
 
-# Connect the client to a host IP & port number; dependent on previous user input
+# Open new socket and connect using host IP and port number defined above
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((host, int(port)))
 
 stop_thread = False
 
-helpPG = 'Valid commands are as follows' #TODO: Write these two
-adminPG = 'ADMINISTRATOR COMMANDS:'
+# Add client commands to the help message here
+help_msg = 'Valid commands:\n/help, /exit, /w [user] [message], /online, /channels, /join #[channel name], /transfer [user] [path to file]'
+# Add admin commands to the help message here
+admin_help_msg = 'Additional commands for admins:\n/kick [user], /ban [user], /unban [user], /make #[channel name], /close #[channel name]'
 
 # function Receive
 # Receives & decodes data from the server; if data can't be decoded, client disconnects
@@ -30,39 +32,39 @@ def receive():
 	while True:
 		global stop_thread
 		if stop_thread == True:
-			# [for debugging thread closure]
-			# print('breaking receive loop')
+			# Use the following line for debugging thread closure
+			#print('DEBUG_CLIENT: Breaking receive() loop.')
 			break
+
 		try:
-			message = client.recv(1024).decode('ascii')
-			# the server uses a client to send messages which is why client is here
+			message = client.recv(1024).decode('ascii') # Server uses a client to send messages
 			if message == 'ID':
 				client.send(username.encode('ascii'))
 				next_msg = client.recv(1024).decode('ascii')
-				if next_msg == 'PASS':
+				if next_msg == 'PASS': # Using PASS keyword to ask for password
 					client.send(password.encode('ascii'))
 					if client.recv(1024).decode('ascii') == 'REFUSE':
-						print('Connection was refused, incorrect password')
+						print('ERROR: Connection refused due to invalid password.')
 						stop_thread = True
-				elif next_msg == 'BAN':
-					print('Connection refused: you have been banned by an administrator')
-					client.close()
+				elif next_msg == 'BAN': # Using BAN keyword to disconnect user
+					print('ERROR: Connection refused due to being banned by an administrator.')
+					client.close() # Close socket connected to the server
 					stop_thread = True
-			elif message == 'KICKED':
-				client.close()
+			elif message == 'KICKED': # Using KICKED keyword to disconnect user
+				print('ERROR: Connection to server refused.')
+				client.close() # Close socket connected to the server
 				stop_thread = True
-			elif message == 'EXIT':
-				print('You have left the room succesfully')
+			elif message == 'EXIT': # Using EXIT keyword to disconnect user
+				print('Now disconnecting from the server.')
 				stop_thread = True
-
-			elif message.startswith('FTP_REQ'):
+			elif message.startswith('FTP_REQ'): # Using FTP_REQ keyword to request file transfer
 				content = message.split()
 				print(f'{content[1]} would like to transfer file [{content[2]}]. Will you accept? (y/n)')
 				resp = input("")
 				client.send(resp.encode('ascii'))
 				if resp == 'y':
 					file_name = client.recv(1024).decode()
-					file_size = client.recv(1024).decode() # just here if we decide to implement a progress bar
+					#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 					file = open(file_name, 'wb')
 					file_bytes = b""
 					done = False
@@ -79,73 +81,73 @@ def receive():
 				print(message)
 		except:
 			print('Data transfer stopped, closing connection.')
-			client.close()
-	# [for debugging thread closure]
-	# print('receive loop broken')
+			client.close() # Close socket connected to the server
+	
+	# Use the following line for debugging thread closure
+	#print('DEBUG_CLIENT: Broke receive() loop successfully.')
 
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
 def write():
-	# User input function is always running in order to catch input
-	while True:
+	while True: # Always running in order to catch input
 		if stop_thread:
-			# [for debugging thread closure]
-			#print('breaking write loop')
+			# Use the following line for debugging thread closure
+			#print('DEBUG_CLIENT: Breaking write() loop.')
 			break
 		try:
 			content = input("")
 			isAdmin = False
-			if username == 'admin':
+			if username == 'admin': # Change this if we decide to add support for multiple admins
 				isAdmin = True
 
-			if content.startswith('/'): #indicates a command
+			if content.startswith('/'): # Forward slash indicates a command is being used; check which command
 				if (content.startswith('/help')):
-					print(helpPG)
+					print(help_msg)
 					if isAdmin:
-						print(adminPG)
+						print(admin_help_msg)
 				
-				elif (content.startswith('/kick') & isAdmin):
-					print(f'kicking {content[6:]}')
+				elif (content.startswith('/kick') & isAdmin): # Kicks a user temporarily
+					print(f'Kicking user {content[6:]}')
 					client.send(f'KICK {content[6:]}'.encode('ascii'))
 
-				elif (content.startswith('/ban') & isAdmin):
-					print(f'banning {content[5:]}')
+				elif (content.startswith('/ban') & isAdmin): # Bans a user
+					print(f'Banning user {content[5:]}')
 					client.send(f'BAN {content[5:]}'.encode('ascii'))
 
-				elif (content.startswith('/unban') & isAdmin):
-					print(f'unbanning {content[7:]}')
+				elif (content.startswith('/unban') & isAdmin): # Unbans a user
+					print(f'Unbanning user {content[7:]}')
 					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
 
-				elif (content.startswith('/make') & isAdmin):
+				elif (content.startswith('/make') & isAdmin): # Make a new server channel
 					client.send(f'MAKE {content[6:]}'.encode('ascii'))
 
-				elif (content.startswith('/close') & isAdmin):
+				elif (content.startswith('/close') & isAdmin): # Closes an existing server channel
 					client.send(f'CLOSE {content[7:]}'.encode('ascii'))
 
-				elif (content.startswith('/exit')):
-					print('Exiting')
+				elif (content.startswith('/exit')): # Exits the server
+					print('Exiting server.')
 					client.send('EXIT'.encode('ascii'))
 				
-				elif(content.startswith('/w')):
-					print(f'whispering')
+				elif (content.startswith('/w')): # Sends a private message to another user
+					print('Whispering to another user.')
 					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
 
-				elif(content.startswith('/online')):
+				elif (content.startswith('/online')): # Lists all users that are currently online
 					client.send('USERS'.encode('ascii'))
 
-				elif(content.startswith('/channels')):
+				elif (content.startswith('/channels')): # Lists all available server channels
 					client.send('CHANNELS'.encode('ascii'))
 
-				elif (content.startswith('/join')):
+				elif (content.startswith('/join')): # Moves user to another server channel
 					client.send(f'JOIN {content[6:]}'.encode('ascii'))
 				
-				elif(content.startswith('/transfer')):
+				elif (content.startswith('/transfer')): # Sends a request for file transfer to another user
 					command = content.split()
 					target = command[1]
 					file = command[2:]
 					client.send(f'REQ {target} {file}'.encode('ascii'))
 					response = client.recv(1204).decode('ascii')
-					if response == 'FTP CONF':
+					if response == 'FTP_CONF':
 						f = open(file, 'rb')
 						f_size = os.path.getsize(file)
 						client.send(file.encode())
@@ -154,26 +156,25 @@ def write():
 						client.sendall(data)
 						client.send(b"<END>")
 						f.close()
-					elif response == 'FTP DENY':
-						print(f'{target} has declined your file transfer request')
+					elif response == 'FTP_DENY':
+						print(f'{target} has declined your file transfer request.')
 					else:
-						print('Server has sent an unknown response. File transfer was likely unsuccesful or incomplete')
+						print('ERROR: Unknown response from server. File transfer attempt unsuccessful or incomplete.')
 
-					
 				else:
-					print('invalid command')
+					print('ERROR: Invalid command. Use /help to list all valid commands.')
 			else:
 				message = (f'{username}: {content}')
 				client.send(message.encode('ascii'))
 
 		except:
-			print('unable to send message')
-	# [for debugging thread closure]
-	# print('write loop broken')
+			print('ERROR: Unable to send message to server.')
+	# Use the following line for debugging thread closure
+	#print('DEBUG_CLIENT: Broke write() loop successfully.')
 		
-# Both functions need their own thread since we need to be able to send & recieve messages simultaneously
-receive_thread = threading.Thread(target=receive)
+# Both functions need their own thread since we need to be able to send & receive messages simultaneously
+receive_thread = threading.Thread(target = receive)
 receive_thread.start()
 
-write_thread = threading.Thread(target=write)
+write_thread = threading.Thread(target = write)
 write_thread.start()
