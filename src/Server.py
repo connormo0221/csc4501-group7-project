@@ -151,7 +151,7 @@ def transfer_request(hostname, clientname, filename):
 def intermediate_file_acc(client):
 	client.send('FTP CONF'.encode('ascii'))
 	file_name = client.recv(1024).decode()
-	file_size = client.recv(1024).decode()
+	file_size = client.recv(1024).decode() # just here if we decide to implement a progress bar
 	file = open(file_name, 'wb')
 	file_bytes = b""
 	done = False
