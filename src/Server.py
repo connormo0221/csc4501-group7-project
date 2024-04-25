@@ -146,7 +146,47 @@ def join_channel(client, channel_name):
 	else:
 		client.send('Could not join, channel does not exist'.encode('ascii'))
 
-	
+def transfer_request(hostname, clientname, filename):
+	client = clients[usernames.index(clientname)]
+	client.send(f'FTP_REQ {hostname} {filename}')
+	response = client.recv(1024).decode('ascii')
+	if response == 'y':
+		return True
+	else:
+		return False
+
+def intermediate_file_acc(client):
+	client.send('FTP CONF'.encode('ascii'))
+	file_name = client.recv(1024).decode()
+	file_size = client.recv(1024).decode()
+	file = open(file_name, 'wb')
+	file_bytes = b""
+	done = False
+	while not done:
+		data = client.recv(1024)
+		if file_bytes[-5:] == b"<END>":
+			done = True
+		else:
+			file_bytes += data
+	file.write(file_bytes)
+	file.close()
+
+def transfer_file(filename, target):
+	f = open(filename, 'rb')
+	f_size = os.path.getsize(filename)
+	client = clients[usernames.index(target)]
+	client.send(filename.encode())
+	client.send(str(f_size).encode())
+	data = f.read()
+	client.sendall(data)
+	client.send(b"<END>")
+	f.close()
+
+def rm_local(filename):
+	if os.path.exists(filename):
+		os.remove(filename)
+	else:
+		print(f'file deletion was attempted on filename [{filename}] but no such file exists')
 
 # function Client Connection Handler
 # When a client connects to the server, recieve messages from client & send them to all clients (including itself)
@@ -244,7 +284,22 @@ def handle(client):
 					join_channel(client, chanName)
 				else:
 					client.send('incorrect channel name format, use /help to display valid commands')
-
+			
+			# USER IS REQUESTING TO TRANSFER A FILE TO ANOTHER USER #
+			elif cmd.decode('ascii').startswith('REQ'):
+				content = (cmd.decode('ascii')[4:]).split
+				c = content.split()
+				target = c[0]
+				filename = c[1]
+				hostname = usernames[clients.index(client)]
+				accepted = transfer_request(hostname, target, filename)
+				if accepted:
+					intermediate_file_acc(client)
+					transfer_file(filename, target)
+					rm_local(filename)
+				else:
+					client.send('FTP DENY')
+					rm_local(filename)
 
 			else:
 				clientidx = clients(client)

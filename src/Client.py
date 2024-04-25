@@ -54,6 +54,27 @@ def receive():
 			elif message == 'EXIT':
 				print('You have left the room succesfully')
 				stop_thread = True
+
+			elif message.startswith('FTP_REQ'):
+				content = message.split()
+				print(f'{content[1]} would like to transfer file [{content[2]}]. Will you accept? (y/n)')
+				resp = input("")
+				client.send(resp.encode('ascii'))
+				if resp == 'y':
+					file_name = client.recv(1024).decode()
+					file_size = client.recv(1024).decode()
+					file = open(file_name, 'wb')
+					file_bytes = b""
+					done = False
+					while not done:
+						data = client.recv(1024)
+						if file_bytes[-5:] == b"<END>":
+							done = True
+						else:
+							file_bytes += data
+					file.write(file_bytes)
+					file.close()
+
 			else:
 				print(message)
 		except:
@@ -117,6 +138,27 @@ def write():
 
 				elif (content.startswith('/join')):
 					client.send(f'JOIN {content[6:]}'.encode('ascii'))
+				
+				elif(content.startswith('/transfer')):
+					command = content.split()
+					target = command[1]
+					file = command[2:]
+					client.send(f'REQ {target} {file}'.encode('ascii'))
+					response = client.recv(1204).decode('ascii')
+					if response == 'FTP CONF':
+						f = open(file, 'rb')
+						f_size = os.path.getsize(file)
+						client.send(file.encode())
+						client.send(str(f_size).encode())
+						data = f.read()
+						client.sendall(data)
+						client.send(b"<END>")
+						f.close()
+					elif response == 'FTP DENY':
+						print(f'{target} has declined your file transfer request')
+					else:
+						print('Server has sent an unknown response. File transfer was likely unsuccesful or incomplete')
+
 					
 				else:
 					print('invalid command')
