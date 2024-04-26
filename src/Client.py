@@ -2,9 +2,13 @@ import threading
 import socket
 import os
 
+# IMPORTANT
 # TODO: check that all features are working as intended
 # TODO: check that common errors are handled properly
 # TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
+# SLIGHTLY LESS IMPORTANT
+# TODO: fix not being able to accept file transfer requests due to conflicting connections
+# TODO: make sure the client can exit gracefully from failed file transfers
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
@@ -32,10 +36,10 @@ def receive():
 	while True:
 		global stop_thread
 		# Use the following line for debugging thread closure
-		print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
+		#print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
 		if stop_thread:
 			# Use the following line for debugging thread closure
-			print('DEBUG_CLIENT: Breaking receive() loop.')
+			#print('DEBUG_CLIENT: Breaking receive() loop.')
 			client.close()
 			break
 
@@ -56,11 +60,10 @@ def receive():
 				print('ERROR: Connection to server refused.')
 				stop_thread = True
 			elif message == 'EXIT': # Using EXIT keyword to disconnect user
-				print('Now disconnecting from the server.')
 				stop_thread = True
 			elif message.startswith('FTP_REQ'): # Using FTP_REQ keyword to request file transfer
 				content = message.split()
-				print(f'{content[1]} would like to transfer file [{content[2]}]. Will you accept? (y/n)')
+				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? (y/n)')
 				resp = input("")
 				client.send(resp.encode('ascii'))
 				if resp == 'y':
@@ -123,7 +126,7 @@ def write():
 					client.send(f'CLOSE {content[7:]}'.encode('ascii'))
 
 				elif (content.startswith('/exit')): # Exits the server
-					print('Exiting server.')
+					print('Now exiting the server.')
 					client.send('EXIT'.encode('ascii'))
 				
 				elif (content.startswith('/w')): # Sends a private message to another user
@@ -144,7 +147,7 @@ def write():
 					target = command[1]
 					file = command[2:]
 					client.send(f'REQ {target} {file}'.encode('ascii'))
-					response = client.recv(1204).decode('ascii')
+					response = client.recv(1024).decode('ascii')
 					if response == 'FTP_CONF':
 						f = open(file, 'rb')
 						f_size = os.path.getsize(file)
@@ -167,10 +170,10 @@ def write():
 
 		except:
 			if receive_thread.is_alive(): # Only send error message if receive thread is still active
-				print('ERROR: Unable to send message to server.')
+				print('ERROR: Unable to send a message to the server.')
 			break
 	# Use the following line for debugging thread closure
-	print('DEBUG_CLIENT: Broke write() loop successfully.')
+	#print('DEBUG_CLIENT: Broke write() loop successfully.')
 		
 # Both functions need their own thread since we need to be able to send & receive messages simultaneously
 receive_thread = threading.Thread(target = receive)

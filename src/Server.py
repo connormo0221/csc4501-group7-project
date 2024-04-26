@@ -3,10 +3,15 @@ import socket
 import os
 import sys
 
+# IMPORTANT
 # TODO: check that all features are working as intended
 # TODO: check that common errors are handled properly
-# TODO: prevent admins from removing the #general channel
 # TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
+# SLIGHTLY LESS IMPORTANT
+# TODO: remove plaintext admin password
+# TODO: prevent admins from removing the #general channel
+# TODO: add method to close the server that automatically exits the window
+# TODO: fix channels not working properly (example: user entry message doesn't show for the first user)
 
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
@@ -14,15 +19,13 @@ port = 29170 # Make sure to use an unassigned port number, best range is 29170 t
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
 server.listen() # Puts the server into listening mode
-print('Server is online.')
+print(f'Server is now online. Awaiting connections on {host}/{port}.')
 
 # Storing connected client info into lists; a single index value should correspond to a user in all lists
 clients = [] # stores (host, port) pairs
 usernames = [] # stores client usernames
 channel = [] # stores the name of the user's current channel
 strikes = [] # stores the number of strikes a user has
-
-stop_thread = False
 
 # Default communication method
 # Sends a message to all clients in the same channel as the sender
@@ -146,7 +149,7 @@ def join_channel(client, channel_name):
 # Send request for file transfer to another client
 def transfer_request(hostname, clientname, filename):
 	client = clients[usernames.index(clientname)]
-	client.send(f'FTP_REQ {hostname} {filename}')
+	client.send(f'FTP_REQ {hostname} {filename}'.encode('ascii'))
 	response = client.recv(1024).decode('ascii')
 	if response == 'y':
 		return True
@@ -187,13 +190,13 @@ def rm_local(filename):
 	if os.path.exists(filename):
 		os.remove(filename)
 	else:
-		print(f'ERROR: File deletion was attempted on filename [{filename}] but no such file exists.')
+		print(f'ERROR: File deletion was attempted on filename {filename} but no such file exists.')
 
 # function Client Connection Handler
 # When a client connects to the server, receive messages from client & send them to all clients (including itself)
 def handle(client):
 	while True:
-		global stop_thread
+		stop_thread = False
 		if stop_thread == True:
 			# Use the following line for debugging thread closure
 			print('DEBUG_SERVER: Breaking handle() loop.')
@@ -250,6 +253,7 @@ def handle(client):
 			elif cmd.decode('ascii') == ('EXIT'): # EXITS THE SERVER
 				exit_seq(client)
 				stop_thread = True
+				break
 
 			elif cmd.decode('ascii').startswith('WHISPER'): # MESSAGE A SPECIFIC PERSON
 				content = (cmd.decode('ascii')[8:]).split()
@@ -259,12 +263,12 @@ def handle(client):
 				whisper(sender, target, message)
 			
 			elif cmd.decode('ascii').startswith('USERS'): # LIST ALL CONNECTED USERS
-				client.send('Connected users:\n'.encode('ascii'))
+				client.send('Connected users:'.encode('ascii'))
 				for username in usernames:
 					client.send(f'{username}'.encode('ascii'))
 			
 			elif cmd.decode('ascii').startswith('CHANNELS'): # LIST ALL ACTIVE CHANNELS
-				client.send('Active channels:\n'.encode('ascii'))
+				client.send('Active channels:'.encode('ascii'))
 				with open('channel_list.txt', 'r') as c:
 					valid_channels = c.readlines()
 				tmp = ''.join(valid_channels)
@@ -278,7 +282,7 @@ def handle(client):
 					client.send('ERROR: Incorrect channel name format, use /help to display valid commands.'.encode('ascii'))
 					
 			elif cmd.decode('ascii').startswith('REQ'): # REQUEST FILE TRANSFER TO ANOTHER USER
-				content = (cmd.decode('ascii')[4:]).split
+				content = cmd.decode('ascii')[4:]
 				c = content.split()
 				target = c[0]
 				filename = c[1]
@@ -299,6 +303,7 @@ def handle(client):
 		except:
 			print('ERROR: Exception in handle() loop, printing to terminal:')
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
+			raise AssertionError # Use for full debug info
 			exit_seq(client) # Start client exit sequence if an exception occurs
 			break
 	# Use the following line for debugging thread closure
@@ -321,7 +326,7 @@ def receive():
 			with open('banlist.txt', 'r') as f:
 				bans = f.readlines()
 			
-			if username+'\n' in bans:
+			if username + '\n' in bans:
 				client.send('BAN'.encode('ascii'))
 				client.close()
 				continue
@@ -330,7 +335,7 @@ def receive():
 			if username == 'admin': # Change this if we decide to add support for multiple admins
 				client.send('PASS'.encode('ascii')) # Indicates we want the client to send their password
 				password = client.recv(1024).decode('ascii') # Assuming the client sends a password back we need to check it
-				if password != 'Bouharb': # TODO: Remove plaintext admin password
+				if password != 'Bou-Harb':
 					print(f'User at {str(address)} attempted to login as administrator unsuccesfully.')
 					client.send('REFUSE'.encode('ascii'))
 					client.close()
@@ -347,11 +352,6 @@ def receive():
 			# We run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target = handle, args = (client,))
 			handle_thread.start()
-
-			if handle_thread.is_alive() == False:
-				# Use the following line for debugging thread closure
-				print('DEBUG_SERVER: Breaking receive() loop.')
-				break
 
 		except:
 			print('ERROR: Failed to receive client data.')
