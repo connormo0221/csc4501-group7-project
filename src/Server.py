@@ -295,7 +295,7 @@ def handle(client):
 			else: # Only executes if no commands were used
 				client_index = clients.index(client)
 				curr_channel = channel[client_index]
-				broadcast(message.encode('ascii'), curr_channel)
+				broadcast(message, curr_channel)
 		except:
 			print('ERROR: Exception in handle() loop, printing to terminal:')
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
