@@ -25,6 +25,8 @@ client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 client.connect((host, int(port)))
 
 stop_thread = False
+fname = ''
+hname = ''
 
 # Add client commands to the help message here
 help_msg = 'Valid commands:\n/help, /exit, /w [user] [message], /online, /channels, /join #[channel name], /transfer [user] [path to file]'
@@ -36,6 +38,8 @@ admin_help_msg = 'Additional commands for admins:\n/kick [user], /ban [user], /u
 def receive():
 	while True:
 		global stop_thread
+		global hname
+		global fname
 		# Use the following line for debugging thread closure
 		#print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
 		if stop_thread:
@@ -64,11 +68,21 @@ def receive():
 				stop_thread = True
 			elif message.startswith('FTP_REQ'): # Using FTP_REQ keyword to request file transfer
 				content = message.split()
-				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? (Y/N)')
-			elif message.startswith('FTP_CONF'): # This message should only be used in the transfer command of the write function
-				continue						 # so if we recieve it here, we need to ignore it
-			elif message.startswith('FTP_DENY'): # This message should only be used in the transfer command of the write function
-				continue						 # so if we recieve it here, we need to ignore it
+				hname = content[1]
+				fname = content[2]
+				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? Type /accept or /deny')
+			elif message.startswith('FTP_CONF'): # Indicates a positive response from another user to a FTP_REQ
+				file = message[9:]
+				f = open(file, 'rb')
+				f_size = os.path.getsize(file)
+				client.send(file.encode())
+				client.send(str(f_size).encode())
+				data = f.read()
+				client.sendall(data)
+				client.send(b"<END>")
+				f.close()
+			elif message.startswith('FTP_DENY'): # Indicates a negative response from another user to a FTP_REQ
+				print(f'{message[9:]} has declined your file transfer request.')	
 			elif message.startswith('DATA RECV'): #indicates that a file is being transferred
 				file_name = client.recv(1024).decode()
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
@@ -97,6 +111,8 @@ def receive():
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
 def write():
+	global fname
+	global hname
 	while True: # Always running in order to catch input
 		try:
 			content = input("")
@@ -148,20 +164,18 @@ def write():
 				elif (content.startswith('/transfer')): # Sends a request for file transfer to another user
 					command = content.split()
 					target = command[1]
-					file = command[2:]
+					file = command[2]
 					client.send(f'REQ {target} {file}'.encode('ascii'))
-					response = client.recv(1024).decode('ascii')
-					if response == 'FTP_CONF':
-						f = open(file, 'rb')
-						f_size = os.path.getsize(file)
-						client.send(file.encode())
-						client.send(str(f_size).encode())
-						data = f.read()
-						client.sendall(data)
-						client.send(b"<END>")
-						f.close()
-					elif response == 'FTP_DENY':
-						print(f'{target} has declined your file transfer request.')
+				
+				elif(content.startswith('/accept')):
+					client.send(f'FTP_AFF {hname} {fname}')
+					hname = ''
+					fname = ''
+
+				elif(content.startswith('/deny')):
+					client.send(f'FTP_NEG {hname} {fname}')
+					hname = ''
+					fname = ''
 
 				else:
 					print('ERROR: Invalid command. Use /help to list all valid commands.')

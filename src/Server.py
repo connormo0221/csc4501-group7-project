@@ -150,18 +150,12 @@ def join_channel(client, channel_name):
 def transfer_request(hostname, clientname, filename):
 	client = clients[usernames.index(clientname)]
 	client.send(f'FTP_REQ {hostname} {filename}'.encode('ascii'))
-	response = client.recv(1024).decode('ascii')
-	if response == 'Y':
-		return True
-	else:
-		return False
 
 # Receive a file from the sender's computer
-def intermediate_file_acc(client):
-	client.send('FTP_CONF'.encode('ascii'))
-	file_name = client.recv(1024).decode()
+def intermediate_file_acc(client, filename):
+	client.send(f'FTP_CONF {filename}'.encode('ascii'))
 	#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
-	file = open(file_name, 'wb')
+	file = open(filename, 'wb')
 	file_bytes = b""
 	done = False
 	while not done:
@@ -177,13 +171,12 @@ def intermediate_file_acc(client):
 def transfer_file(filename, target):
 	f = open(filename, 'rb')
 	f_size = os.path.getsize(filename)
-	client = clients[usernames.index(target)]
-	client.send('DATA RECV'.encode('ascii'))
-	client.send(filename.encode())
-	client.send(str(f_size).encode())
+	target.send('DATA RECV'.encode('ascii'))
+	target.send(filename.encode())
+	target.send(str(f_size).encode())
 	data = f.read()
-	client.sendall(data)
-	client.send(b"<END>")
+	target.sendall(data)
+	target.send(b"<END>")
 	f.close()
 
 # Remove a file from the host computer
@@ -285,17 +278,28 @@ def handle(client):
 			elif cmd.decode('ascii').startswith('REQ'): # REQUEST FILE TRANSFER TO ANOTHER USER
 				content = cmd.decode('ascii')[4:]
 				c = content.split()
-				target = c[0]
+				targetname = c[0]
 				filename = c[1]
 				hostname = usernames[clients.index(client)]
-				accepted = transfer_request(hostname, target, filename)
-				if accepted:
-					intermediate_file_acc(client)
-					transfer_file(filename, target)
-					rm_local(filename)
-				else:
-					client.send('FTP_DENY'.encode('ascii'))
-					rm_local(filename)
+				intermediate_file_acc(client, filename)
+				transfer_request(hostname, targetname, filename)
+
+			elif cmd.decode('ascii').startswith('FTP_AFF'):
+				content = cmd.decode('ascii').split()
+				hostname = content[1]
+				filename = content[2]
+				transfer_file(filename, client)
+				rm_local(filename)
+				host = clients[usernames.index(hostname)]
+				host.send('User has accepted your file transfer request')
+			
+			elif cmd.decode('ascii').startswith('FTP_NEG'):
+				content = cmd.decode('ascii').split()
+				hostname = content[1]
+				filename = content[2]
+				rm_local(filename)
+				host = clients[usernames.index(hostname)]
+				host.send('User has denied your file transfer request')
 
 			else: # Only executes if no commands were used
 				client_index = clients.index(client)
