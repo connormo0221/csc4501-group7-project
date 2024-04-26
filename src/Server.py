@@ -1,11 +1,12 @@
 import threading
 import socket
 import os
+import sys
 
 # TODO: check that all features are working as intended
 # TODO: check that common errors are handled properly
-# TODO: add method for admins to manually shut down the server (force-close the server window?)
 # TODO: prevent admins from removing the #general channel
+# TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
 
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
@@ -137,7 +138,7 @@ def join_channel(client, channel_name):
 		client_index = clients[client]
 		username = usernames[client_index]
 		channel[client_index] = channel_name
-		broadcast(f"{username} has joined {channel_name}", channel_name)
+		broadcast(f'{username} has joined {channel_name}'.encode('ascii'), channel_name)
 		client.send(f'You have joined {channel_name} succesfully.'.encode('ascii'))
 	else:
 		client.send('ERROR: Channel does not exist.'.encode('ascii'))
@@ -195,7 +196,7 @@ def handle(client):
 		global stop_thread
 		if stop_thread == True:
 			# Use the following line for debugging thread closure
-			#print('DEBUG_SERVER: Breaking handle() loop.')
+			print('DEBUG_SERVER: Breaking handle() loop.')
 			break
 			
 		try:
@@ -257,12 +258,12 @@ def handle(client):
 				sender = client
 				whisper(sender, target, message)
 			
-			elif cmd.decode('ascii').starswith('USERS'): # LIST ALL CONNECTED USERS
+			elif cmd.decode('ascii').startswith('USERS'): # LIST ALL CONNECTED USERS
 				client.send('Connected users:\n'.encode('ascii'))
 				for username in usernames:
 					client.send(f'{username}'.encode('ascii'))
 			
-			elif cmd.decode('ascii').starswith('CHANNELS'): # LIST ALL ACTIVE CHANNELS
+			elif cmd.decode('ascii').startswith('CHANNELS'): # LIST ALL ACTIVE CHANNELS
 				client.send('Active channels:\n'.encode('ascii'))
 				with open('channel_list.txt', 'r') as c:
 					valid_channels = c.readlines()
@@ -270,9 +271,9 @@ def handle(client):
 				client.send(tmp.encode('ascii'))
 				
 			elif cmd.decode('ascii').startswith('JOIN'): # JOIN A NEW CHANNEL
-				chanName = cmd.decode('ascii')[5:]
-				if chanName.startswith('#'):
-					join_channel(client, chanName)
+				channel_name = cmd.decode('ascii')[5:]
+				if channel_name.startswith('#'):
+					join_channel(client, channel_name)
 				else:
 					client.send('ERROR: Incorrect channel name format, use /help to display valid commands.'.encode('ascii'))
 					
@@ -288,18 +289,20 @@ def handle(client):
 					transfer_file(filename, target)
 					rm_local(filename)
 				else:
-					client.send('FTP_DENY')
+					client.send('FTP_DENY'.encode('ascii'))
 					rm_local(filename)
 
 			else: # Only executes if no commands were used
-				client_index = clients(client)
+				client_index = clients.index(client)
 				curr_channel = channel[client_index]
 				broadcast(message.encode('ascii'), curr_channel)
 		except:
-			exit_seq(client) # Start exit sequence if an exception occurs
+			print('ERROR: Exception in handle() loop, printing to terminal:')
+			print(sys.exception()) # Print exception to the terminal w/o closing the server
+			exit_seq(client) # Start client exit sequence if an exception occurs
 			break
 	# Use the following line for debugging thread closure
-	#print('DEBUG_SERVER: Broke handle() loop successfully.')
+	print('DEBUG_SERVER: Broke handle() loop successfully.')
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
@@ -344,7 +347,16 @@ def receive():
 			# We run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target = handle, args = (client,))
 			handle_thread.start()
+
+			if handle_thread.is_alive() == False:
+				# Use the following line for debugging thread closure
+				print('DEBUG_SERVER: Breaking receive() loop.')
+				break
+
 		except:
 			print('ERROR: Failed to receive client data.')
+			break
+	# Use the following line for debugging thread closure
+	print('DEBUG_SERVER: Broke receive() loop successfully.')
 
 receive()

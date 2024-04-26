@@ -4,7 +4,7 @@ import os
 
 # TODO: check that all features are working as intended
 # TODO: check that common errors are handled properly
-# TODO: add method to automatically close the client window upon exiting the server (through /exit or errors)
+# TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
@@ -31,9 +31,12 @@ admin_help_msg = 'Additional commands for admins:\n/kick [user], /ban [user], /u
 def receive():
 	while True:
 		global stop_thread
-		if stop_thread == True:
+		# Use the following line for debugging thread closure
+		print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
+		if stop_thread:
 			# Use the following line for debugging thread closure
-			#print('DEBUG_CLIENT: Breaking receive() loop.')
+			print('DEBUG_CLIENT: Breaking receive() loop.')
+			client.close()
 			break
 
 		try:
@@ -48,11 +51,9 @@ def receive():
 						stop_thread = True
 				elif next_msg == 'BAN': # Using BAN keyword to disconnect user
 					print('ERROR: Connection refused due to being banned by an administrator.')
-					client.close() # Close socket connected to the server
 					stop_thread = True
 			elif message == 'KICKED': # Using KICKED keyword to disconnect user
 				print('ERROR: Connection to server refused.')
-				client.close() # Close socket connected to the server
 				stop_thread = True
 			elif message == 'EXIT': # Using EXIT keyword to disconnect user
 				print('Now disconnecting from the server.')
@@ -82,18 +83,15 @@ def receive():
 		except:
 			print('Data transfer stopped, closing connection.')
 			client.close() # Close socket connected to the server
+			break
 	
-	# Use the following line for debugging thread closure
-	#print('DEBUG_CLIENT: Broke receive() loop successfully.')
+	# This line is only reached if the receive() loop has been broken
+	print('Press ENTER to exit.') # Force the user to submit input in order to close the write() thread
 
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
 def write():
 	while True: # Always running in order to catch input
-		if stop_thread:
-			# Use the following line for debugging thread closure
-			#print('DEBUG_CLIENT: Breaking write() loop.')
-			break
 		try:
 			content = input("")
 			isAdmin = False
@@ -168,9 +166,11 @@ def write():
 				client.send(message.encode('ascii'))
 
 		except:
-			print('ERROR: Unable to send message to server.')
+			if receive_thread.is_alive(): # Only send error message if receive thread is still active
+				print('ERROR: Unable to send message to server.')
+			break
 	# Use the following line for debugging thread closure
-	#print('DEBUG_CLIENT: Broke write() loop successfully.')
+	print('DEBUG_CLIENT: Broke write() loop successfully.')
 		
 # Both functions need their own thread since we need to be able to send & receive messages simultaneously
 receive_thread = threading.Thread(target = receive)
@@ -178,3 +178,6 @@ receive_thread.start()
 
 write_thread = threading.Thread(target = write)
 write_thread.start()
+
+if receive_thread.is_alive() == False & write_thread.is_alive() == False:
+	os._exit(0) # Exit client if both threads have been closed
