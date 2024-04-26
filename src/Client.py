@@ -71,18 +71,15 @@ def receive():
 				hname = content[1]
 				fname = content[2]
 				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? Type /accept or /deny')
-			elif message.startswith('FTP_CONF'): # Indicates a positive response from another user to a FTP_REQ
+			elif message.startswith('FTP_CONF'): # Indicates a positive response from another client to a FTP_REQ
 				file = message[9:]
 				f = open(file, 'rb')
 				f_size = os.path.getsize(file)
-				client.send(file.encode())
 				client.send(str(f_size).encode())
 				data = f.read()
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
-			elif message.startswith('FTP_DENY'): # Indicates a negative response from another user to a FTP_REQ
-				print(f'{message[9:]} has declined your file transfer request.')	
 			elif message.startswith('DATA RECV'): #indicates that a file is being transferred
 				file_name = client.recv(1024).decode()
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
