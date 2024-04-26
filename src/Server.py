@@ -151,7 +151,7 @@ def transfer_request(hostname, clientname, filename):
 	client = clients[usernames.index(clientname)]
 	client.send(f'FTP_REQ {hostname} {filename}'.encode('ascii'))
 	response = client.recv(1024).decode('ascii')
-	if response == 'y':
+	if response == 'Y':
 		return True
 	else:
 		return False
@@ -178,6 +178,7 @@ def transfer_file(filename, target):
 	f = open(filename, 'rb')
 	f_size = os.path.getsize(filename)
 	client = clients[usernames.index(target)]
+	client.send('DATA RECV'.encode('ascii'))
 	client.send(filename.encode())
 	client.send(str(f_size).encode())
 	data = f.read()

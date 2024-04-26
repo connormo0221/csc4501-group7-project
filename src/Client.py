@@ -1,4 +1,5 @@
 import threading
+import time
 import socket
 import os
 
@@ -63,23 +64,25 @@ def receive():
 				stop_thread = True
 			elif message.startswith('FTP_REQ'): # Using FTP_REQ keyword to request file transfer
 				content = message.split()
-				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? (y/n)')
-				resp = input("")
-				client.send(resp.encode('ascii'))
-				if resp == 'y':
-					file_name = client.recv(1024).decode()
-					#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
-					file = open(file_name, 'wb')
-					file_bytes = b""
-					done = False
-					while not done:
-						data = client.recv(1024)
-						if file_bytes[-5:] == b"<END>":
-							done = True
-						else:
-							file_bytes += data
-					file.write(file_bytes)
-					file.close()
+				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? (Y/N)')
+			elif message.startswith('FTP_CONF'): # This message should only be used in the transfer command of the write function
+				continue						 # so if we recieve it here, we need to ignore it
+			elif message.startswith('FTP_DENY'): # This message should only be used in the transfer command of the write function
+				continue						 # so if we recieve it here, we need to ignore it
+			elif message.startswith('DATA RECV'): #indicates that a file is being transferred
+				file_name = client.recv(1024).decode()
+				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
+				file = open(file_name, 'wb')
+				file_bytes = b""
+				done = False
+				while not done:
+					data = client.recv(1024)
+					if file_bytes[-5:] == b"<END>":
+						done = True
+					else:
+						file_bytes += data
+				file.write(file_bytes)
+				file.close()
 
 			else:
 				print(message)
@@ -101,7 +104,7 @@ def write():
 			if username == 'admin': # Change this if we decide to add support for multiple admins
 				isAdmin = True
 
-			if content.startswith('/'): # Forward slash indicates a command is being used; check which command
+			elif content.startswith('/'): # Forward slash indicates a command is being used; check which command
 				if (content.startswith('/help')):
 					print(help_msg)
 					if isAdmin:
@@ -159,8 +162,6 @@ def write():
 						f.close()
 					elif response == 'FTP_DENY':
 						print(f'{target} has declined your file transfer request.')
-					else:
-						print('ERROR: Unknown response from server. File transfer attempt unsuccessful or incomplete.')
 
 				else:
 					print('ERROR: Invalid command. Use /help to list all valid commands.')
