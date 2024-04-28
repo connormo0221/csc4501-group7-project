@@ -3,10 +3,7 @@ import socket
 import os
 import sys
 
-# IMPORTANT
-# TODO: ensure all features are working as intended
-# SLIGHTLY LESS IMPORTANT
-# TODO: remove plaintext admin password
+# TODO: find a way to incorporate the admin password w/o storing it as plaintext
 # TODO: add method that automatically closes the window if the server is closed
 
 host = '127.0.0.1' # localhost 
@@ -21,7 +18,6 @@ print(f'Server is now online. Awaiting connections on {host}/{port}.')
 clients = [] # stores (host, port) pairs
 usernames = [] # stores client usernames
 channel = [] # stores the name of the user's current channel
-strikes = [] # stores the number of strikes a user has
 
 # Default communication method
 # Sends a message to all clients in the same channel as the sender
@@ -37,31 +33,21 @@ def isAdmin(client):
 		return True
 	else:
 		return False
-	
-# Daemon function that checks the strikes list and kicks a user if the number is >= 5
-def bouncer():
-	while True:
-		for i in strikes:
-			if i >= 5:
-				kick_user(clients[i])
 
 # Kicks a user from the server
 def kick_user(name):
-	if name in usernames:
-		index = usernames.index(name)
-		to_be_kicked = clients[index]
-		tbk_chan = channel[index]
-		to_be_kicked.send('You have been kicked by an admin'.encode('ascii'))
-		del clients[index]
-		del usernames[index]
-		del channel[index]
-		del strikes[index]
-		to_be_kicked.send('KICKED'.encode('ascii'))
-		broadcast(f'{name} has been kicked by an admin'.encode('ascii'), tbk_chan)
+	client_index = usernames.index(name)
+	client = clients[client_index]
+	curr_channel = channel[client_index]
+	del clients[client_index]
+	del usernames[client_index]
+	del channel[client_index]
+	client.send('KICKED'.encode('ascii')) # Send KICKED keyword to client to stop their receive() thread
+	broadcast(f'{name} has been kicked by an admin.'.encode('ascii'), curr_channel)
 
 # Kicks a user from the server and then adds their name to the banlist
 def ban_user(to_be_banned, client):
-	tmp = to_be_banned + '\n'
+	tmp = to_be_banned + '\n' # Add newline character; needed for the file check to work
 	with open('banlist.txt', 'r') as r:
 		banned_users = r.readlines()
 	if tmp in banned_users:
@@ -73,7 +59,7 @@ def ban_user(to_be_banned, client):
 
 # Removes a username from the banlist, if present
 def unban_user(to_be_unbanned, client):
-	to_be_unbanned = to_be_unbanned+'\n'
+	to_be_unbanned = to_be_unbanned + '\n' # Add newline character; needed for the file check to work
 	with open('banlist.txt', 'r') as r:
 		banned_users = r.readlines()
 	if to_be_unbanned in banned_users:
@@ -82,7 +68,7 @@ def unban_user(to_be_unbanned, client):
 				if line != to_be_unbanned:
 					w.write(line)
 	else:
-		client.send('ERROR: This user is not currently banned.'.encode('ascii'))
+		client.send('ERROR: This user has not been banned.'.encode('ascii'))
 
 # Creates a new text channel
 def create_channel(channel_name, client):
@@ -103,7 +89,7 @@ def close_channel(channel_name, client):
 	if channel_name in valid_channels:
 		for c in channel:
 			if c == channel_name:
-				clients[channel.index(c)].send('An admin has closed the channel you were in. You will be moved to #general'.encode('ascii'))
+				clients[channel.index(c)].send('An admin has closed the channel you were in. You will be moved to #general.'.encode('ascii'))
 				join_channel(clients[channel.index(c)], '#general')
 		with open('channel_list.txt', 'w') as w: # Re-writes the channel_list file (Python workaround)
 			for line in valid_channels:
@@ -120,7 +106,6 @@ def exit_seq(client, still_connected = True):
 	del clients[client_index]
 	del usernames[client_index]
 	del channel[client_index]
-	del strikes[client_index]
 	broadcast(f'{name} has left the server.'.encode('ascii'), curr_channel)
 	if still_connected == True:
 		client.send('EXIT'.encode('ascii'))
@@ -167,7 +152,7 @@ def intermediate_file_acc(client, filename):
 			done = True
 		else:
 			file_bytes += data
-	file_bytes = file_bytes[:-5] # Remove bytes containing <END> message
+	file_bytes = file_bytes[:-5] # Remove bytes containing <END> message from the file
 	file.write(file_bytes)
 	file.close()
 
@@ -208,8 +193,11 @@ def handle(client):
 			## ADMIN COMMANDS ##
 			if cmd.decode('ascii').startswith('KICK'): # KICKS A USER FROM THE SERVER
 				if isAdmin(client):
-					to_be_kicked = cmd.decode('ascii')[5:]
-					kick_user(to_be_kicked)
+					kicked_user = cmd.decode('ascii')[5:]
+					if kicked_user in usernames:
+						kick_user(kicked_user)
+					else:
+						client.send(f'ERROR: No user by the name of {kicked_user} exists.'.encode('ascii'))
 				else:
 					client.send('ERROR: Command refused.'.encode('ascii'))
 
@@ -310,20 +298,16 @@ def handle(client):
 				host.send('User has denied your file transfer request.'.encode('ascii'))
 				rm_local(filename) # Deletes the server's local copy of the file
 				print(f'User has denied file transfer.\nFile {filename} deleted from temporary storage.')
-			
-			elif cmd.decode('ascii').startswith('REMOVED'):
-				stop_thread = True
-				break
 
 			else: # Only executes if no commands were used
-				client_index = clients.index(client)
-				curr_channel = channel[client_index]
-				broadcast(message, curr_channel)
+				if client in clients:
+					client_index = clients.index(client)
+					curr_channel = channel[client_index]
+					broadcast(message, curr_channel)
+				else: # Used for when a client's data has been erased
+					stop_thread = True
+					break 
 		
-		# For errors attempting to access fields which do not exist
-		except ValueError:
-			print('There was an error attempting to access a value in the most recent message.\n')
-			break
 		# For connection errors
 		except ConnectionError as err_con:
 			print(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:')
@@ -342,9 +326,6 @@ def handle(client):
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
 def receive():
-	bouncer_thread = threading.Thread(target = bouncer, daemon = True)
-	bouncer_thread.start()
-
 	while True:
 		try:
 			# Always running the accept method; if it finds something, return client & address
@@ -369,19 +350,17 @@ def receive():
 					print(f'User at {str(address)} attempted to login as administrator unsuccesfully.')
 					client.send('REFUSE'.encode('ascii'))
 					client.close()
-					continue # The while-true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
+					continue # The while-true loop needs to continue, but the code below shouldn't execute for an incorrect login
 
-			thread_name = username + "_thread"
 			usernames.append(username)
 			clients.append(client)
-			channel.append('#general\n') # Users are in general chat by default upon joining
-			strikes.append(0) # User will start with no strikes
+			channel.append('#general\n') # Users are put in #general chat by default upon joining
 			
 			print(f'The username of the client is {username}.')
 			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general\n')
 
 			# We run one thread for each connected client because they all need to be handled simultaneously
-			handle_thread = threading.Thread(target = handle, args = (client,), name=thread_name)
+			handle_thread = threading.Thread(target = handle, args = (client,), daemon = True)
 			handle_thread.start()
 
 		except IOError:
@@ -391,3 +370,4 @@ def receive():
 	#print('DEBUG_SERVER: Broke receive() loop successfully.')
 
 receive()
+sys.exit() # Closes the server once no threads are left

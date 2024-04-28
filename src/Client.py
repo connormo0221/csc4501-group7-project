@@ -1,11 +1,9 @@
 import threading
 import socket
-import os
+#import os
+import sys
 
-# IMPORTANT
-# TODO: ensure all features are working as intended
-# SLIGHTLY LESS IMPORTANT
-# TODO: make sure the client will exit gracefully upon most errors
+# TODO: make sure the client will exit by itself upon most errors
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
@@ -59,8 +57,7 @@ def receive():
 					print('ERROR: Connection refused due to being banned by an administrator.')
 					stop_thread = True
 			elif message == 'KICKED': # Using KICKED keyword to disconnect user
-				print('ERROR: Connection to server refused.')
-				client.send('REMOVED'.encode('ascii'))
+				print('ERROR: Connection refused; user was kicked from the server by an administrator.')
 				stop_thread = True
 			elif message == 'EXIT': # Using EXIT keyword to disconnect user
 				stop_thread = True
@@ -126,15 +123,15 @@ def write():
 						print(admin_help_msg)
 				
 				elif (content.startswith('/kick') & isAdmin): # Kicks a user temporarily
-					print(f'Kicking user {content[6:]}')
+					print(f'Kicking user {content[6:]}.')
 					client.send(f'KICK {content[6:]}'.encode('ascii'))
 
 				elif (content.startswith('/ban') & isAdmin): # Bans a user
-					print(f'Banning user {content[5:]}')
+					print(f'Banning user {content[5:]}.')
 					client.send(f'BAN {content[5:]}'.encode('ascii'))
 
 				elif (content.startswith('/unban') & isAdmin): # Unbans a user
-					print(f'Unbanning user {content[7:]}')
+					print(f'Unbanning user {content[7:]}.')
 					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
 
 				elif (content.startswith('/make') & isAdmin): # Make a new server channel
@@ -200,4 +197,4 @@ write_thread = threading.Thread(target = write)
 write_thread.start()
 
 if (not receive_thread.is_alive()) & (not write_thread.is_alive()):
-	os._exit(0) # Exit client if both threads have been closed
+	sys.exit() # Exit client if both threads have been closed
