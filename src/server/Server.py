@@ -107,8 +107,8 @@ def close_channel(channel_name, client):
 	else:
 		client.send('ERROR: Cannot remove a channel that does not exist.'.encode('ascii'))
 
-# Method for exiting the server
-def exit_seq(client):
+# Method for exiting the server; by default, sends EXIT keyword to the client
+def exit_seq(client, still_connected = True):
 	client_index = clients.index(client) # Get a client's index via their (host, port) pair
 	name = usernames[client_index] # Use index to get client name for broadcast
 	curr_channel = channel[client_index] # Use index to get current channel for broadcast
@@ -117,7 +117,8 @@ def exit_seq(client):
 	del channel[client_index]
 	del strikes[client_index]
 	broadcast(f'{name} has left the server.'.encode('ascii'), curr_channel)
-	client.send('EXIT'.encode('ascii'))
+	if still_connected == True:
+		client.send('EXIT'.encode('ascii'))
 
 # Sends a message to a specific user
 def whisper(sender, target, message):
@@ -174,6 +175,7 @@ def transfer_file(filename, target):
 	target.sendall(data)
 	target.send(b"<END>")
 	f.close()
+	target.send(f'{filename} has been transferred successfully!'.encode('ascii'))
 
 # Remove a file from the host computer
 def rm_local(filename):
@@ -189,7 +191,7 @@ def handle(client):
 		stop_thread = False
 		if stop_thread == True:
 			# Use the following line for debugging thread closure
-			print('DEBUG_SERVER: Breaking handle() loop.')
+			#print('DEBUG_SERVER: Breaking handle() loop.')
 			break
 			
 		try:
@@ -281,23 +283,27 @@ def handle(client):
 				hostname = usernames[clients.index(client)]
 				intermediate_file_acc(client, filename)	# Temporarily stores file on server
 				transfer_request(hostname, targetname, filename)
+				print(f'File transfer request made to {targetname} by {hostname}.\nFile {filename} stored in temporary storage.')
 
 			elif cmd.decode('ascii').startswith('FTP_AFF'): # TARGET USER ACCEPTED FILE TRANSFER
 				content = cmd.decode('ascii').split()
 				hostname = content[1]
 				filename = content[2]
+				host = clients[usernames.index(hostname)]
+				host.send('User has accepted your file transfer request.'.encode('ascii'))
 				transfer_file(filename, client)
 				rm_local(filename) # Deletes the server's local copy of the file
-				host = clients[usernames.index(hostname)]
-				host.send('User has accepted your file transfer request.')
+				host.send(f'{filename} has been transferred successfully!'.encode('ascii'))
+				print(f'User has accepted file transfer.\nFile {filename} deleted from temporary storage.')
 			
 			elif cmd.decode('ascii').startswith('FTP_NEG'): # TARGET USER DENIED FILE TRANSFER
 				content = cmd.decode('ascii').split()
 				hostname = content[1]
 				filename = content[2]
-				rm_local(filename) # Deletes the server's local copy of the file
 				host = clients[usernames.index(hostname)]
-				host.send('User has denied your file transfer request.')
+				host.send('User has denied your file transfer request.'.encode('ascii'))
+				rm_local(filename) # Deletes the server's local copy of the file
+				print(f'User has denied file transfer.\nFile {filename} deleted from temporary storage.')
 
 			else: # Only executes if no commands were used
 				client_index = clients.index(client)
@@ -308,16 +314,16 @@ def handle(client):
 		except ConnectionError as err_con:
 			print(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:')
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
-			exit_seq(client) # Start client exit sequence if an exception occurs
+			exit_seq(client, False) # Start client exit sequence w/o sending an EXIT message
 			break
 		# For file I/O errors
 		except (EOFError, UnicodeError, FileExistsError, FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError) as err_io:
 			print(f'ERROR: Exception {type(err_io).__name__} thrown within handle() loop, printing details to terminal:')
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
-			exit_seq(client) # Start client exit sequence if an exception occurs
+			exit_seq(client) # Start client exit sequence
 			break
 	# Use the following line for debugging thread closure
-	print('DEBUG_SERVER: Broke handle() loop successfully.')
+	#print('DEBUG_SERVER: Broke handle() loop successfully.')
 
 # function Receive
 # Combines all other methods into one function; used for receiving data from the client
@@ -367,6 +373,6 @@ def receive():
 			print('ERROR: Failed to receive client data.')
 			break
 	# Use the following line for debugging thread closure
-	print('DEBUG_SERVER: Broke receive() loop successfully.')
+	#print('DEBUG_SERVER: Broke receive() loop successfully.')
 
 receive()

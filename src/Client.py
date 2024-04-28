@@ -40,7 +40,7 @@ def receive():
 		#print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
 		if stop_thread == True:
 			# Use the following line for debugging thread closure
-			print('DEBUG_CLIENT: Breaking receive() loop.')
+			#print('DEBUG_CLIENT: Breaking receive() loop.')
 			client.close()
 			print('All connections closed.')
 			break
@@ -77,7 +77,7 @@ def receive():
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
-			elif message.startswith('DATA_RECV'): #indicates that a file is being transferred
+			elif message.startswith('DATA_RECV'): # Indicates that a file is being transferred
 				file_name = client.recv(1024).decode()
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 				file = open(file_name, 'wb')
@@ -101,7 +101,7 @@ def receive():
 			break
 	
 	# This line is only reached if the receive() loop has been broken
-	print('Press ENTER to exit.') # Force the user to submit input in order to close the write() thread below
+	print('Press ENTER to exit.') # Force the user to move control out of the write() thread below
 
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
@@ -162,14 +162,16 @@ def write():
 					target = command[1]
 					file = command[2]
 					client.send(f'REQ {target} {file}'.encode('ascii'))
+					print('Press ENTER to confirm.') # Force user to move control to the receive() thread
+					continue
 				
 				elif(content.startswith('/accept')):
-					client.send(f'FTP_AFF {hname} {fname}')
+					client.send(f'FTP_AFF {hname} {fname}'.encode('ascii'))
 					hname = ''
 					fname = ''
 
 				elif(content.startswith('/deny')):
-					client.send(f'FTP_NEG {hname} {fname}')
+					client.send(f'FTP_NEG {hname} {fname}'.encode('ascii'))
 					hname = ''
 					fname = ''
 
@@ -180,12 +182,12 @@ def write():
 				client.send(message.encode('ascii'))
 
 		except IOError:
-			if receive_thread.is_alive(): # Only send error message if receive thread is still active
+			if receive_thread.is_alive(): # Only send error message if receive() thread is still active
 				stop_thread = True # Tell receive() thread to stop
 				print('ERROR: Unable to send a message to the server.')
 			break
 	# Use the following line for debugging thread closure
-	print('DEBUG_CLIENT: Broke write() loop successfully.')
+	#print('DEBUG_CLIENT: Broke write() loop successfully.')
 		
 # Both functions need their own thread since we need to be able to send & receive messages simultaneously
 receive_thread = threading.Thread(target = receive)
