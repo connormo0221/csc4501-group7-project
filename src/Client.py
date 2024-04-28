@@ -1,15 +1,11 @@
 import threading
-import time
 import socket
 import os
 
 # IMPORTANT
-# TODO: check that all features are working as intended
-# TODO: check that common errors are handled properly
-# TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
+# TODO: ensure all features are working as intended
 # SLIGHTLY LESS IMPORTANT
-# TODO: fix not being able to accept file transfer requests due to conflicting connections
-# TODO: make sure the client can exit gracefully from failed file transfers
+# TODO: make sure the client will exit gracefully upon most errors
 
 # Allow client to set their username; used for display on the server
 username = input('Type in a username: ')
@@ -42,10 +38,11 @@ def receive():
 		global fname
 		# Use the following line for debugging thread closure
 		#print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
-		if stop_thread:
+		if stop_thread == True:
 			# Use the following line for debugging thread closure
-			#print('DEBUG_CLIENT: Breaking receive() loop.')
+			print('DEBUG_CLIENT: Breaking receive() loop.')
 			client.close()
+			print('All connections closed.')
 			break
 
 		try:
@@ -80,7 +77,7 @@ def receive():
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
-			elif message.startswith('DATA RECV'): #indicates that a file is being transferred
+			elif message.startswith('DATA_RECV'): #indicates that a file is being transferred
 				file_name = client.recv(1024).decode()
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 				file = open(file_name, 'wb')
@@ -97,17 +94,19 @@ def receive():
 
 			else:
 				print(message)
-		except:
+		
+		except IOError:
 			print('Data transfer stopped, closing connection.')
 			client.close() # Close socket connected to the server
 			break
 	
 	# This line is only reached if the receive() loop has been broken
-	print('Press ENTER to exit.') # Force the user to submit input in order to close the write() thread
+	print('Press ENTER to exit.') # Force the user to submit input in order to close the write() thread below
 
 # function Write
 # Waits for user input & then sends a message to the server upon pressing the enter key
 def write():
+	global stop_thread
 	global fname
 	global hname
 	while True: # Always running in order to catch input
@@ -180,12 +179,13 @@ def write():
 				message = (f'{username}: {content}')
 				client.send(message.encode('ascii'))
 
-		except:
+		except IOError:
 			if receive_thread.is_alive(): # Only send error message if receive thread is still active
+				stop_thread = True # Tell receive() thread to stop
 				print('ERROR: Unable to send a message to the server.')
 			break
 	# Use the following line for debugging thread closure
-	#print('DEBUG_CLIENT: Broke write() loop successfully.')
+	print('DEBUG_CLIENT: Broke write() loop successfully.')
 		
 # Both functions need their own thread since we need to be able to send & receive messages simultaneously
 receive_thread = threading.Thread(target = receive)
@@ -194,5 +194,5 @@ receive_thread.start()
 write_thread = threading.Thread(target = write)
 write_thread.start()
 
-if receive_thread.is_alive() == False & write_thread.is_alive() == False:
+if (not receive_thread.is_alive()) & (not write_thread.is_alive()):
 	os._exit(0) # Exit client if both threads have been closed

@@ -4,14 +4,10 @@ import os
 import sys
 
 # IMPORTANT
-# TODO: check that all features are working as intended
-# TODO: check that common errors are handled properly
-# TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
+# TODO: ensure all features are working as intended
 # SLIGHTLY LESS IMPORTANT
 # TODO: remove plaintext admin password
-# TODO: prevent admins from removing the #general channel
-# TODO: add method to close the server that automatically exits the window
-# TODO: fix channels not working properly (example: user entry message doesn't show for the first user)
+# TODO: add method that automatically closes the window if the server is closed
 
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
@@ -171,7 +167,7 @@ def intermediate_file_acc(client, filename):
 def transfer_file(filename, target):
 	f = open(filename, 'rb')
 	f_size = os.path.getsize(filename)
-	target.send('DATA RECV'.encode('ascii'))
+	target.send('DATA_RECV'.encode('ascii'))
 	target.send(filename.encode())
 	target.send(str(f_size).encode())
 	data = f.read()
@@ -236,7 +232,9 @@ def handle(client):
 			elif cmd.decode('ascii').startswith('CLOSE'): # CLOSES A SERVER CHANNEL
 				if isAdmin(client):
 					new_channel = cmd.decode('ascii')[5:]
-					if new_channel.startswith('#'):
+					if new_channel == '#general':
+						client.send('ERROR: Cannot remove the default channel.'.encode('ascii'))
+					elif new_channel.startswith('#'):
 						close_channel(new_channel, client)
 					else:
 						client.send('ERROR: Invalid channel name format, use /help to display valid commands.'.encode('ascii'))
@@ -281,34 +279,41 @@ def handle(client):
 				targetname = c[0]
 				filename = c[1]
 				hostname = usernames[clients.index(client)]
-				intermediate_file_acc(client, filename)
+				intermediate_file_acc(client, filename)	# Temporarily stores file on server
 				transfer_request(hostname, targetname, filename)
 
-			elif cmd.decode('ascii').startswith('FTP_AFF'):
+			elif cmd.decode('ascii').startswith('FTP_AFF'): # TARGET USER ACCEPTED FILE TRANSFER
 				content = cmd.decode('ascii').split()
 				hostname = content[1]
 				filename = content[2]
 				transfer_file(filename, client)
-				rm_local(filename)
+				rm_local(filename) # Deletes the server's local copy of the file
 				host = clients[usernames.index(hostname)]
-				host.send('User has accepted your file transfer request')
+				host.send('User has accepted your file transfer request.')
 			
-			elif cmd.decode('ascii').startswith('FTP_NEG'):
+			elif cmd.decode('ascii').startswith('FTP_NEG'): # TARGET USER DENIED FILE TRANSFER
 				content = cmd.decode('ascii').split()
 				hostname = content[1]
 				filename = content[2]
-				rm_local(filename)
+				rm_local(filename) # Deletes the server's local copy of the file
 				host = clients[usernames.index(hostname)]
-				host.send('User has denied your file transfer request')
+				host.send('User has denied your file transfer request.')
 
 			else: # Only executes if no commands were used
 				client_index = clients.index(client)
 				curr_channel = channel[client_index]
 				broadcast(message, curr_channel)
-		except:
-			print('ERROR: Exception in handle() loop, printing to terminal:')
+		
+		# For connection errors
+		except ConnectionError as err_con:
+			print(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:')
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
-			raise AssertionError # Use for full debug info
+			exit_seq(client) # Start client exit sequence if an exception occurs
+			break
+		# For file I/O errors
+		except (EOFError, UnicodeError, FileExistsError, FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError) as err_io:
+			print(f'ERROR: Exception {type(err_io).__name__} thrown within handle() loop, printing details to terminal:')
+			print(sys.exception()) # Print exception to the terminal w/o closing the server
 			exit_seq(client) # Start client exit sequence if an exception occurs
 			break
 	# Use the following line for debugging thread closure
@@ -358,7 +363,7 @@ def receive():
 			handle_thread = threading.Thread(target = handle, args = (client,))
 			handle_thread.start()
 
-		except:
+		except IOError:
 			print('ERROR: Failed to receive client data.')
 			break
 	# Use the following line for debugging thread closure
