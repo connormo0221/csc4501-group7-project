@@ -48,36 +48,38 @@ def bouncer():
 # Kicks a user from the server
 def kick_user(name):
 	if name in usernames:
-		name_index = usernames.index(name)
-		client_to_kick = clients[name_index] # Use index to get client info
-		curr_channel = channel[name_index] # Use index to find user's current channel
-		del clients[name_index]
-		del usernames[name_index]
-		del channel[name_index]
-		del strikes[name_index]
-		client_to_kick.send('You were removed from the chat.'.encode('ascii'))
-		client_to_kick.send('KICKED'.encode('ascii')) # Tell client to disconnect via KICKED message
-		broadcast(f'{name} was removed from the chat.'.encode('ascii'), curr_channel)
+		index = usernames.index(name)
+		to_be_kicked = clients[index]
+		tbk_chan = channel[index]
+		to_be_kicked.send('You have been kicked by an admin'.encode('ascii'))
+		del clients[index]
+		del usernames[index]
+		del channel[index]
+		del strikes[index]
+		to_be_kicked.send('KICKED'.encode('ascii'))
+		broadcast(f'{name} has been kicked by an admin'.encode('ascii'), tbk_chan)
 
 # Kicks a user from the server and then adds their name to the banlist
 def ban_user(to_be_banned, client):
+	tmp = to_be_banned + '\n'
 	with open('banlist.txt', 'r') as r:
 		banned_users = r.readlines()
-	if to_be_banned in banned_users:
+	if tmp in banned_users:
 		client.send('ERROR: This user has already been banned.'.encode('ascii'))
 	else:
 		kick_user(to_be_banned)
-		with open('banlist.txt', 'w') as w: # Storing in a text file for continuity
-			w.write(f'{to_be_banned}\n')
+		with open('banlist.txt', 'a') as a: # Storing in a text file for continuity
+			a.write(f'{to_be_banned}\n')
 
 # Removes a username from the banlist, if present
 def unban_user(to_be_unbanned, client):
+	to_be_unbanned = to_be_unbanned+'\n'
 	with open('banlist.txt', 'r') as r:
 		banned_users = r.readlines()
 	if to_be_unbanned in banned_users:
 		with open('banlist.txt', 'w') as w:
 			for line in banned_users:
-				if line.strip('\n') != to_be_unbanned:
+				if line != to_be_unbanned:
 					w.write(line)
 	else:
 		client.send('ERROR: This user is not currently banned.'.encode('ascii'))
@@ -308,12 +310,20 @@ def handle(client):
 				host.send('User has denied your file transfer request.'.encode('ascii'))
 				rm_local(filename) # Deletes the server's local copy of the file
 				print(f'User has denied file transfer.\nFile {filename} deleted from temporary storage.')
+			
+			elif cmd.decode('ascii').startswith('REMOVED'):
+				stop_thread = True
+				break
 
 			else: # Only executes if no commands were used
 				client_index = clients.index(client)
 				curr_channel = channel[client_index]
 				broadcast(message, curr_channel)
 		
+		# For errors attempting to access fields which do not exist
+		except ValueError:
+			print('There was an error attempting to access a value in the most recent message.\n')
+			break
 		# For connection errors
 		except ConnectionError as err_con:
 			print(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:')
@@ -361,6 +371,7 @@ def receive():
 					client.close()
 					continue # The while-true loop needs to continue, but the code below shouldn't execute for an incorrect login, which is why this is here
 
+			thread_name = username + "_thread"
 			usernames.append(username)
 			clients.append(client)
 			channel.append('#general\n') # Users are in general chat by default upon joining
@@ -370,7 +381,7 @@ def receive():
 			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general\n')
 
 			# We run one thread for each connected client because they all need to be handled simultaneously
-			handle_thread = threading.Thread(target = handle, args = (client,))
+			handle_thread = threading.Thread(target = handle, args = (client,), name=thread_name)
 			handle_thread.start()
 
 		except IOError:

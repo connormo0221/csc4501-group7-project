@@ -60,6 +60,7 @@ def receive():
 					stop_thread = True
 			elif message == 'KICKED': # Using KICKED keyword to disconnect user
 				print('ERROR: Connection to server refused.')
+				client.send('REMOVED'.encode('ascii'))
 				stop_thread = True
 			elif message == 'EXIT': # Using EXIT keyword to disconnect user
 				stop_thread = True
