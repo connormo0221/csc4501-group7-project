@@ -71,16 +71,16 @@ def receive():
 			elif message.startswith('FTP_CONF'): # Indicates a positive response from another client to a FTP_REQ
 				file = message[9:]
 				f = open(file, 'rb')
-				f_size = os.path.getsize(file)
-				client.send(str(f_size).encode())
+				#f_size = os.path.getsize(file) # Uncomment this if we want to implement a progress bar
+				#client.send(str(f_size).encode()) # Uncomment this if we want to implement a progress bar
 				data = f.read()
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
 			elif message.startswith('DATA_RECV'): # Indicates that a file is being transferred
-				file_name = client.recv(1024).decode()
+				filename = client.recv(1024).decode()
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
-				file = open(file_name, 'wb')
+				file = open(filename, 'wb')
 				file_bytes = b""
 				done = False
 				while not done:
@@ -89,8 +89,10 @@ def receive():
 						done = True
 					else:
 						file_bytes += data
+				file_bytes = file_bytes[:-5] # Remove bytes containing <END> message 
 				file.write(file_bytes)
 				file.close()
+				print(f'{filename} has been transferred successfully!')
 
 			else:
 				print(message)
@@ -116,7 +118,7 @@ def write():
 			if username == 'admin': # Change this if we decide to add support for multiple admins
 				isAdmin = True
 
-			elif content.startswith('/'): # Forward slash indicates a command is being used; check which command
+			if content.startswith('/'): # Forward slash indicates a command is being used; check which command
 				if (content.startswith('/help')):
 					print(help_msg)
 					if isAdmin:

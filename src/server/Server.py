@@ -84,25 +84,27 @@ def unban_user(to_be_unbanned, client):
 
 # Creates a new text channel
 def create_channel(channel_name, client):
+	channel_name = channel_name + '\n' # Add newline character; needed for the file check to work
 	with open('channel_list.txt', 'r') as c:
 		valid_channels = c.readlines()
 	if channel_name in valid_channels:
 		client.send('ERROR: Channel already exists.'.encode('ascii'))
 	else:
 		with open('channel_list.txt', 'a') as f: # Storing in a text file for continuity
-			f.write(f'{channel_name}\n')
+			f.write(f'{channel_name}')
 
 # Closes a text channel by moving all users to general and then removing it from the channel list
 def close_channel(channel_name, client):
+	channel_name = channel_name + '\n' # Add newline character; needed for the file check to work
 	with open('channel_list.txt', 'r') as r:
 		valid_channels = r.readlines()
 	if channel_name in valid_channels:
 		for c in channel:
 			if c == channel_name:
-				c = '#general'
-		with open('channel_list.txt', 'w') as w:
+				c = '#general\n'
+		with open('channel_list.txt', 'w') as w: # Re-writes the channel_list file (Python workaround)
 			for line in valid_channels:
-				if line.strip('\n') != channel_name:
+				if line != channel_name:
 					w.write(line)
 	else:
 		client.send('ERROR: Cannot remove a channel that does not exist.'.encode('ascii'))
@@ -132,14 +134,15 @@ def whisper(sender, target, message):
 
 # Move client to a specified channel
 def join_channel(client, channel_name):
+	channel_name = channel_name + '\n' # Add newline character; needed for the file check to work
 	with open('channel_list.txt', 'r') as c:
 		valid_channels = c.readlines()
 	if channel_name in valid_channels:
-		client_index = clients[client]
+		client_index = clients.index(client)
 		username = usernames[client_index]
 		channel[client_index] = channel_name
-		broadcast(f'{username} has joined {channel_name}'.encode('ascii'), channel_name)
-		client.send(f'You have joined {channel_name} succesfully.'.encode('ascii'))
+		broadcast(f'{username} has joined {channel_name[:-1]}!'.encode('ascii'), channel_name)
+		client.send(f'You have joined {channel_name[:-1]} succesfully.'.encode('ascii'))
 	else:
 		client.send('ERROR: Channel does not exist.'.encode('ascii'))
 
@@ -161,21 +164,21 @@ def intermediate_file_acc(client, filename):
 			done = True
 		else:
 			file_bytes += data
+	file_bytes = file_bytes[:-5] # Remove bytes containing <END> message
 	file.write(file_bytes)
 	file.close()
 
 # Send a file from the host computer
 def transfer_file(filename, target):
 	f = open(filename, 'rb')
-	f_size = os.path.getsize(filename)
+	#f_size = os.path.getsize(filename) # Uncomment this if we want to implement a progress bar
 	target.send('DATA_RECV'.encode('ascii'))
 	target.send(filename.encode())
-	target.send(str(f_size).encode())
+	#target.send(str(f_size).encode()) # Uncomment this if we want to implement a progress bar
 	data = f.read()
 	target.sendall(data)
 	target.send(b"<END>")
 	f.close()
-	target.send(f'{filename} has been transferred successfully!'.encode('ascii'))
 
 # Remove a file from the host computer
 def rm_local(filename):
@@ -359,11 +362,11 @@ def receive():
 
 			usernames.append(username)
 			clients.append(client)
-			channel.append('#general') # Users are in general chat by default upon joining
+			channel.append('#general\n') # Users are in general chat by default upon joining
 			strikes.append(0) # User will start with no strikes
 			
 			print(f'The username of the client is {username}.')
-			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general')
+			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general\n')
 
 			# We run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target = handle, args = (client,))
