@@ -101,7 +101,8 @@ def close_channel(channel_name, client):
 	if channel_name in valid_channels:
 		for c in channel:
 			if c == channel_name:
-				c = '#general\n'
+				clients[channel.index(c)].send('An admin has closed the channel you were in. You will be moved to #general'.encode('ascii'))
+				join_channel(clients[channel.index(c)], '#general')
 		with open('channel_list.txt', 'w') as w: # Re-writes the channel_list file (Python workaround)
 			for line in valid_channels:
 				if line != channel_name:
@@ -236,7 +237,7 @@ def handle(client):
 			
 			elif cmd.decode('ascii').startswith('CLOSE'): # CLOSES A SERVER CHANNEL
 				if isAdmin(client):
-					new_channel = cmd.decode('ascii')[5:]
+					new_channel = cmd.decode('ascii')[6:]
 					if new_channel == '#general':
 						client.send('ERROR: Cannot remove the default channel.'.encode('ascii'))
 					elif new_channel.startswith('#'):
