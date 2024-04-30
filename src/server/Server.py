@@ -2,6 +2,8 @@ import threading
 import socket
 import os
 import sys
+import ssl
+from SecurityFunctionality import *
 
 # TODO: find a way to incorporate the admin password w/o storing it as plaintext
 # TODO: add method that automatically closes the window if the server is closed
@@ -9,10 +11,19 @@ import sys
 host = '127.0.0.1' # localhost 
 port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
 
+#generate public and private key
+server_private_key = RSAKeys()
+server_public_key = server_private_key.public_key
+client_keys = {}
+
+#Implement basic SSl protection with default context
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((host, port))
 server.listen() # Puts the server into listening mode
 print(f'Server is now online. Awaiting connections on {host}/{port}.')
+#server = context.wrap_socket(server_base, server_side=True)
 
 # Storing connected client info into lists; a single index value should correspond to a user in all lists
 clients = [] # stores (host, port) pairs
@@ -25,7 +36,8 @@ def broadcast(message, sender_channel):
 	for client in clients:
 		client_index = clients.index(client)
 		if channel[client_index] == sender_channel:
-			client.send(message)
+			encoded_message = RSAEncode(message, client_keys[client])
+			client.send(encoded_message)
 
 # Checks if a client has administrator privileges
 def isAdmin(client):
@@ -116,6 +128,7 @@ def whisper(sender, target, message):
 		sender_name = usernames[clients.index(sender)]
 		target_user = clients[usernames.index(target)]
 		tmp = ' '.join(message) # Convert split message back into a string
+		tmp = RSAEncode(tmp,client_keys[target_user])
 		target_user.send(f'{sender_name} whispers: {tmp}'.encode('ascii'))
 	else:
 		sender.send('ERROR: This user is not currently online.'.encode('ascii'))
@@ -333,6 +346,11 @@ def receive():
 			print(f'User has connected with IP and port {str(address)}.')
 			client.send('ID'.encode('ascii'))
 			username = client.recv(1024).decode('ascii')
+			e = client.recv(1024).decode('ascii')
+			n = client.recv(1024).decode('ascii')
+			client_keys[username] = PublicKey(int(e), int(n))
+			client.send(str(server_public_key.e).encode('ascii'))
+			client.send(str(server_public_key.n).encode('ascii'))
 
 			with open('banlist.txt', 'r') as f:
 				bans = f.readlines()
@@ -359,6 +377,7 @@ def receive():
 			print(f'The username of the client is {username}.')
 			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general\n')
 
+			print("test1\n")
 			# We run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target = handle, args = (client,), daemon = True)
 			handle_thread.start()

@@ -2,6 +2,8 @@ import threading
 import socket
 #import os
 import sys
+import ssl
+from SecurityFunctionality import *
 
 # TODO: make sure the client will exit by itself upon most errors
 
@@ -10,12 +12,22 @@ username = input('Type in a username: ')
 if username == 'admin':
 	password = input('Type in a password: ')
 
+#generate public and private key
+client_private_key = RSAKeys()
+client_public_key = client_private_key.public_key
+server_public_key = PublicKey(None, None)
+
+
 # Server host IP & port number manually set to localhost for this project
 host = '127.0.0.1'
 port = 29170
 
+#Implment basic SSl protection with default context
+context = ssl.create_default_context()
+
 # Open new socket and connect using host IP and port number defined above
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#client = context.wrap_socket(client_base, server_hostname=host)
 client.connect((host, int(port)))
 
 stop_thread = False
@@ -45,9 +57,18 @@ def receive():
 
 		try:
 			message = client.recv(1024).decode('ascii') # Server uses a client to send messages
+			if(message != 'ID'):
+				message = RSADecode(message, client_private_key)
 			if message == 'ID':
 				client.send(username.encode('ascii'))
+				client.send(str(client_public_key.e).encode('ascii'))
+				client.send(str(client_public_key.n).encode('ascii'))
+				e = client.recv(1024).decode('ascii')
+				n = client.recv(1024).decode('ascii')
+				server_public_key.e = int(e)
+				server_public_key.n = int(n)
 				next_msg = client.recv(1024).decode('ascii')
+				print("test2\n")
 				if next_msg == 'PASS': # Using PASS keyword to ask for password
 					client.send(password.encode('ascii'))
 					if client.recv(1024).decode('ascii') == 'REFUSE':
@@ -56,6 +77,7 @@ def receive():
 				elif next_msg == 'BAN': # Using BAN keyword to disconnect user
 					print('ERROR: Connection refused due to being banned by an administrator.')
 					stop_thread = True
+				
 			elif message == 'KICKED': # Using KICKED keyword to disconnect user
 				print('ERROR: Connection refused; user was kicked from the server by an administrator.')
 				stop_thread = True
@@ -178,6 +200,7 @@ def write():
 				else:
 					print('ERROR: Invalid command. Use /help to list all valid commands.')
 			else:
+				content = RSADecode(content, server_public_key)
 				message = (f'{username}: {content}')
 				client.send(message.encode('ascii'))
 
