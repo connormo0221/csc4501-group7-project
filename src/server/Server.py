@@ -12,9 +12,12 @@ host = '127.0.0.1' # localhost
 port = 29170 # Make sure to use an unassigned port number, best range is 29170 to 29998 [main req is port # > 10,000]
 
 #generate public and private key
-server_private_key = RSAKeys()
-server_public_key = server_private_key.public_key
+key_pair = RSAKeys()
+server_private_key = key_pair.private_key
+server_public_key = key_pair.public_key
 client_keys = {}
+n = 0
+e = 0
 
 #Implement basic SSl protection with default context
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -347,12 +350,12 @@ def receive():
 			client, address = server.accept() 
 			print(f'User has connected with IP and port {str(address)}.')
 			client.send('ID'.encode('ascii'))
-			username = client.recv(1024).decode('ascii')
 			e = client.recv(1024).decode('ascii')
 			n = client.recv(1024).decode('ascii')
 			client_keys[username] = PublicKey(int(e), int(n))
-			client.send(str(server_public_key.e).encode('ascii'))
+			client.send(str(server_public_key.e).encdoe('ascii'))
 			client.send(str(server_public_key.n).encode('ascii'))
+			username = client.recv(1024).decode('ascii')
 
 			with open('banlist.txt', 'r') as f:
 				bans = f.readlines()

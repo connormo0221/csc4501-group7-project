@@ -1,3 +1,4 @@
+#Requires import of pycr
 from Crypto.Util import number
 import numpy as np
 
@@ -67,27 +68,7 @@ def RSADecryption(c, private_key):
      #plaintext = (c^d)mod(n)
      p = (ord(c)**private_key.d)%(private_key.p*private_key.q)
      return p
-  
-     
-#Function to find the lowest common multple of two numbers
-def TotientFunction( q, p):
-     #check if q is greater than p
-     #if true start with q and use to incriment
-     if(q>p):
-         x = q
-         largest = q
-     #if p is greater than q
-     #start with p and use to incriment
-     else:
-         x= p
-         largest = p
-     #keep increasing potential common multiples until divisble by both q and p
-     while((x%p != 0) or (x%q != 0)):
-         #incirment potential common multiple by the largest value
-         x += largest
       
-     return x
-       
     
 #create a public key class with e and n as values
 class PublicKey:

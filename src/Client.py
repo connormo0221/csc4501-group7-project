@@ -13,9 +13,12 @@ if username == 'admin':
 	password = input('Type in a password: ')
 
 #generate public and private key
-client_private_key = RSAKeys()
-client_public_key = client_private_key.public_key
+key_pair = RSAKeys()
+client_private_key = key_pair.private_key
+client_public_key = key_pair.public_key
 server_public_key = PublicKey(None, None)
+n = 0
+e = 0
 
 
 # Server host IP & port number manually set to localhost for this project
@@ -57,16 +60,15 @@ def receive():
 
 		try:
 			message = client.recv(1024).decode('ascii') # Server uses a client to send messages
-			if(message != 'ID'):
-				message = RSADecode(message, client_private_key)
+			#if(message != 'ID'):
+			#	message = RSADecode(message, client_private_key)
 			if message == 'ID':
+				client.send(str(client_public_key.e).decode('ascii'))
+				client.send(str(client_public_key.n).decode('ascii'))
+				e = client.recv(1024).encode('ascii')
+				n = client.recv(1024).encode('ascii')
+				server_public_key = PublicKey(int(e), int(n))
 				client.send(username.encode('ascii'))
-				client.send(str(client_public_key.e).encode('ascii'))
-				client.send(str(client_public_key.n).encode('ascii'))
-				e = client.recv(1024).decode('ascii')
-				n = client.recv(1024).decode('ascii')
-				server_public_key.e = int(e)
-				server_public_key.n = int(n)
 				next_msg = RSADecode(client.recv(1024).decode('ascii'), client_private_key)
 				if next_msg == 'PASS': # Using PASS keyword to ask for password
 					password = RSAEncode(password, server_public_key)
