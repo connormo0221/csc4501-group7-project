@@ -26,8 +26,8 @@ port = 29170
 context = ssl.create_default_context()
 
 # Open new socket and connect using host IP and port number defined above
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#client = context.wrap_socket(client_base, server_hostname=host)
+client_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+client = context.wrap_socket(client_base, server_hostname=host)
 client.connect((host, int(port)))
 
 stop_thread = False
@@ -67,11 +67,11 @@ def receive():
 				n = client.recv(1024).decode('ascii')
 				server_public_key.e = int(e)
 				server_public_key.n = int(n)
-				next_msg = client.recv(1024).decode('ascii')
-				print("test2\n")
+				next_msg = RSADecode(client.recv(1024).decode('ascii'), client_private_key)
 				if next_msg == 'PASS': # Using PASS keyword to ask for password
+					password = RSAEncode(password, server_public_key)
 					client.send(password.encode('ascii'))
-					if client.recv(1024).decode('ascii') == 'REFUSE':
+					if RSADecode(client.recv(1024).decode('ascii'), client_private_key) == 'REFUSE':
 						print('ERROR: Connection refused due to invalid password.')
 						stop_thread = True
 				elif next_msg == 'BAN': # Using BAN keyword to disconnect user
@@ -94,17 +94,18 @@ def receive():
 				#f_size = os.path.getsize(file) # Uncomment this if we want to implement a progress bar
 				#client.send(str(f_size).encode()) # Uncomment this if we want to implement a progress bar
 				data = f.read()
+				data = RSAEncode(data, server_public_key)
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
 			elif message.startswith('DATA_RECV'): # Indicates that a file is being transferred
-				filename = client.recv(1024).decode()
+				filename = client.recv(1024).decode(), client_private_key
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 				file = open(filename, 'wb')
 				file_bytes = b""
 				done = False
 				while not done:
-					data = client.recv(1024)
+					data = client.recv(1024), client_private_key
 					if file_bytes[-5:] == b"<END>":
 						done = True
 					else:
@@ -134,6 +135,7 @@ def write():
 	while True: # Always running in order to catch input
 		try:
 			content = input("")
+			content = RSADecode(content, client_private_key)
 			isAdmin = False
 			if username == 'admin': # Change this if we decide to add support for multiple admins
 				isAdmin = True
@@ -146,62 +148,61 @@ def write():
 				
 				elif (content.startswith('/kick') & isAdmin): # Kicks a user temporarily
 					print(f'Kicking user {content[6:]}.')
-					client.send(f'KICK {content[6:]}'.encode('ascii'))
+					client.send(RSAEncode(f'KICK {content[6:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/ban') & isAdmin): # Bans a user
 					print(f'Banning user {content[5:]}.')
-					client.send(f'BAN {content[5:]}'.encode('ascii'))
+					client.send(RSAEncode(f'BAN {content[5:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/unban') & isAdmin): # Unbans a user
 					print(f'Unbanning user {content[7:]}.')
-					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
+					client.send(RSAEncode(f'UNBAN {content[7:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/make') & isAdmin): # Make a new server channel
-					client.send(f'MAKE {content[6:]}'.encode('ascii'))
+					client.send(RSAEncode(f'MAKE {content[6:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/close') & isAdmin): # Closes an existing server channel
-					client.send(f'CLOSE {content[7:]}'.encode('ascii'))
+					client.send(RSAEncode(f'CLOSE {content[7:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/exit')): # Exits the server
 					print('Now exiting the server.')
-					client.send('EXIT'.encode('ascii'))
+					client.send(RSAEncode('EXIT', server_public_key).encode('ascii'))
 				
 				elif (content.startswith('/w')): # Sends a private message to another user
 					print('Whispering to another user.')
-					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
+					client.send(RSAEncode(f'WHISPER {content[3:]}', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/online')): # Lists all users that are currently online
-					client.send('USERS'.encode('ascii'))
+					client.send(RSAEncode('USERS', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/channels')): # Lists all available server channels
-					client.send('CHANNELS'.encode('ascii'))
+					client.send(RSAEncode('CHANNELS', server_public_key).encode('ascii'))
 
 				elif (content.startswith('/join')): # Moves user to another server channel
-					client.send(f'JOIN {content[6:]}'.encode('ascii'))
+					client.send(RSAEncode(f'JOIN {content[6:]}', server_public_key).encode('ascii'))
 				
 				elif (content.startswith('/transfer')): # Sends a request for file transfer to another user
 					command = content.split()
 					target = command[1]
 					file = command[2]
-					client.send(f'REQ {target} {file}'.encode('ascii'))
+					client.send(RSAEncode(f'REQ {target} {file}', server_public_key).encode('ascii'))
 					print('Press ENTER to confirm.') # Force user to move control to the receive() thread
 					continue
 				
 				elif(content.startswith('/accept')):
-					client.send(f'FTP_AFF {hname} {fname}'.encode('ascii'))
+					client.send(RSAEncode(f'FTP_AFF {hname} {fname}', server_public_key).encode('ascii'))
 					hname = ''
 					fname = ''
 
 				elif(content.startswith('/deny')):
-					client.send(f'FTP_NEG {hname} {fname}'.encode('ascii'))
+					client.send(RSAEncode(f'FTP_NEG {hname} {fname}', server_public_key).encode('ascii'))
 					hname = ''
 					fname = ''
 
 				else:
 					print('ERROR: Invalid command. Use /help to list all valid commands.')
 			else:
-				content = RSADecode(content, server_public_key)
-				message = (f'{username}: {content}')
+				message = RSAEncode((f'{username}: {content}'), server_public_key)
 				client.send(message.encode('ascii'))
 
 		except IOError:

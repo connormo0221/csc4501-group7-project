@@ -19,11 +19,11 @@ client_keys = {}
 #Implement basic SSl protection with default context
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((host, port))
-server.listen() # Puts the server into listening mode
+server_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_base.bind((host, port))
+server_base.listen() # Puts the server into listening mode
 print(f'Server is now online. Awaiting connections on {host}/{port}.')
-#server = context.wrap_socket(server_base, server_side=True)
+server = context.wrap_socket(server_base, server_side=True)
 
 # Storing connected client info into lists; a single index value should correspond to a user in all lists
 clients = [] # stores (host, port) pairs
@@ -36,7 +36,7 @@ def broadcast(message, sender_channel):
 	for client in clients:
 		client_index = clients.index(client)
 		if channel[client_index] == sender_channel:
-			encoded_message = RSAEncode(message, client_keys[client])
+			encoded_message = RSAEncode(message, client_keys[usernames[client_index]])
 			client.send(encoded_message)
 
 # Checks if a client has administrator privileges
@@ -54,7 +54,7 @@ def kick_user(name):
 	del clients[client_index]
 	del usernames[client_index]
 	del channel[client_index]
-	client.send('KICKED'.encode('ascii')) # Send KICKED keyword to client to stop their receive() thread
+	client.send(RSAEncode('KICKED', client_keys[name]).encode('ascii')) # Send KICKED keyword to client to stop their receive() thread
 	broadcast(f'{name} has been kicked by an admin.'.encode('ascii'), curr_channel)
 
 # Kicks a user from the server and then adds their name to the banlist
@@ -63,7 +63,7 @@ def ban_user(to_be_banned, client):
 	with open('banlist.txt', 'r') as r:
 		banned_users = r.readlines()
 	if tmp in banned_users:
-		client.send('ERROR: This user has already been banned.'.encode('ascii'))
+		client.send(RSAEncode('ERROR: This user has already been banned.', client_keys[to_be_banned]).encode('ascii'))
 	else:
 		kick_user(to_be_banned)
 		with open('banlist.txt', 'a') as a: # Storing in a text file for continuity
@@ -80,7 +80,7 @@ def unban_user(to_be_unbanned, client):
 				if line != to_be_unbanned:
 					w.write(line)
 	else:
-		client.send('ERROR: This user has not been banned.'.encode('ascii'))
+		client.send(RSAEncode('ERROR: This user has not been banned.', client_keys[to_be_unbanned]).encode('ascii'))
 
 # Creates a new text channel
 def create_channel(channel_name, client):
@@ -88,7 +88,7 @@ def create_channel(channel_name, client):
 	with open('channel_list.txt', 'r') as c:
 		valid_channels = c.readlines()
 	if channel_name in valid_channels:
-		client.send('ERROR: Channel already exists.'.encode('ascii'))
+		client.send(RSAEncode('ERROR: Channel already exists.', client_keys[usernames[client.index]]).encode('ascii'))
 	else:
 		with open('channel_list.txt', 'a') as f: # Storing in a text file for continuity
 			f.write(f'{channel_name}')
@@ -108,7 +108,7 @@ def close_channel(channel_name, client):
 				if line != channel_name:
 					w.write(line)
 	else:
-		client.send('ERROR: Cannot remove a channel that does not exist.'.encode('ascii'))
+		client.send(RSAEncode('ERROR: Cannot remove a channel that does not exist.', client_keys[usernames[client.index]]).encode('ascii'))
 
 # Method for exiting the server; by default, sends EXIT keyword to the client
 def exit_seq(client, still_connected = True):
@@ -120,7 +120,7 @@ def exit_seq(client, still_connected = True):
 	del channel[client_index]
 	broadcast(f'{name} has left the server.'.encode('ascii'), curr_channel)
 	if still_connected == True:
-		client.send('EXIT'.encode('ascii'))
+		client.send(RSAEncode('EXIT', client_keys[usernames[client_index]]).encode('ascii'))
 
 # Sends a message to a specific user
 def whisper(sender, target, message):
@@ -128,10 +128,9 @@ def whisper(sender, target, message):
 		sender_name = usernames[clients.index(sender)]
 		target_user = clients[usernames.index(target)]
 		tmp = ' '.join(message) # Convert split message back into a string
-		tmp = RSAEncode(tmp,client_keys[target_user])
-		target_user.send(f'{sender_name} whispers: {tmp}'.encode('ascii'))
+		target_user.send(RSAEncode(f'{sender_name} whispers: {tmp}', client_keys[target_user]).encode('ascii'))
 	else:
-		sender.send('ERROR: This user is not currently online.'.encode('ascii'))
+		sender.send(RSAEncode('ERROR: This user is not currently online.', client_keys[sender_name]).encode('ascii'))
 
 # Move client to a specified channel
 def join_channel(client, channel_name):
@@ -143,24 +142,25 @@ def join_channel(client, channel_name):
 		username = usernames[client_index]
 		channel[client_index] = channel_name
 		broadcast(f'{username} has joined {channel_name[:-1]}!'.encode('ascii'), channel_name)
-		client.send(f'You have joined {channel_name[:-1]} succesfully.'.encode('ascii'))
+		client.send(RSAEncode(f'You have joined {channel_name[:-1]} succesfully.', client_keys[username]).encode('ascii'))
 	else:
-		client.send('ERROR: Channel does not exist.'.encode('ascii'))
+		client.send(RSAEncode('ERROR: Channel does not exist.', client_keys[username]).encode('ascii'))
 
 # Send request for file transfer to another client
 def transfer_request(hostname, clientname, filename):
 	client = clients[usernames.index(clientname)]
-	client.send(f'FTP_REQ {hostname} {filename}'.encode('ascii'))
+	client.send(RSAEncode(f'FTP_REQ {hostname} {filename}', client_keys[usernames.index(clientname)]).encode('ascii'))
 
 # Receive a file from the sender's computer
 def intermediate_file_acc(client, filename):
-	client.send(f'FTP_CONF {filename}'.encode('ascii'))
+	client.send(RSAEncode(f'FTP_CONF {filename}', client_keys[usernames[client.index]]).encode('ascii'))
 	#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 	file = open(filename, 'wb')
 	file_bytes = b""
 	done = False
 	while not done:
 		data = client.recv(1024)
+		data = RSADecode(data, server_private_key)
 		if file_bytes[-5:] == b"<END>":
 			done = True
 		else:
@@ -177,6 +177,7 @@ def transfer_file(filename, target):
 	target.send(filename.encode())
 	#target.send(str(f_size).encode()) # Uncomment this if we want to implement a progress bar
 	data = f.read()
+	data = RSAEncode(data, server_private_key)
 	target.sendall(data)
 	target.send(b"<END>")
 	f.close()
@@ -201,6 +202,7 @@ def handle(client):
 		try:
 			# Sets message to a received message, up to 1024 bytes
 			cmd = message = client.recv(1024)
+			cmd = message = RSADecode(cmd, server_private_key)
    
 			# Check using keywords if a message is a command
 			## ADMIN COMMANDS ##
@@ -210,23 +212,23 @@ def handle(client):
 					if kicked_user in usernames:
 						kick_user(kicked_user)
 					else:
-						client.send(f'ERROR: No user by the name of {kicked_user} exists.'.encode('ascii'))
+						client.send(RSAEncode(f'ERROR: No user by the name of {kicked_user} exists.', client_keys[usernames[client.index]]).encode('ascii'))
 				else:
-					client.send('ERROR: Command refused.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Command refused.', client_keys[usernames[client.index]]).encode('ascii'))
 
 			elif cmd.decode('ascii').startswith('BAN'): # BANS A USER FROM THE SERVER
 				if isAdmin(client):
 					to_be_banned = cmd.decode('ascii')[4:]
 					ban_user(to_be_banned, client)
 				else:
-					client.send('ERROR: Command refused.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Command refused.', client_keys[usernames[client.index]]).encode('ascii'))
 
 			elif cmd.decode('ascii').startswith('UNBAN'): # UNBANS A USER FROM THE SERVER
 				if isAdmin(client):
 					to_be_unbanned = cmd.decode('ascii')[6:]
 					unban_user(to_be_unbanned, client)
 				else:
-					client.send('ERROR: Command refused.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Command refused.', client_keys[usernames[client.index]]).encode('ascii'))
 			
 			elif cmd.decode('ascii').startswith('MAKE'): # MAKES A NEW SERVER CHANNEL
 				if isAdmin(client):
@@ -234,21 +236,21 @@ def handle(client):
 					if new_channel.startswith('#'):
 						create_channel(new_channel, client)
 					else:
-						client.send('ERROR: Invalid channel name format, use /help to display valid commands.'.encode('ascii'))
+						client.send(RSAEncode('ERROR: Invalid channel name format, use /help to display valid commands.', client_keys[usernames[client.index]]).encode('ascii'))
 				else:
-					client.send('ERROR: Command refused.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Command refused.', client_keys[usernames[client.index]]).encode('ascii'))
 			
 			elif cmd.decode('ascii').startswith('CLOSE'): # CLOSES A SERVER CHANNEL
 				if isAdmin(client):
 					new_channel = cmd.decode('ascii')[6:]
 					if new_channel == '#general':
-						client.send('ERROR: Cannot remove the default channel.'.encode('ascii'))
+						client.send(RSAEncode('ERROR: Cannot remove the default channel.', client_keys[usernames[client.index]]).encode('ascii'))
 					elif new_channel.startswith('#'):
 						close_channel(new_channel, client)
 					else:
-						client.send('ERROR: Invalid channel name format, use /help to display valid commands.'.encode('ascii'))
+						client.send(RSAEncode('ERROR: Invalid channel name format, use /help to display valid commands.', client_keys[usernames[client.index]]).encode('ascii'))
 				else:
-					client.send('ERROR: Command refused.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Command refused.', client_keys[usernames[client.index]]).encode('ascii'))
 
 			## CLIENT COMMANDS ##
 			elif cmd.decode('ascii') == ('EXIT'): # EXITS THE SERVER
@@ -264,15 +266,16 @@ def handle(client):
 				whisper(sender, target, message)
 			
 			elif cmd.decode('ascii').startswith('USERS'): # LIST ALL CONNECTED USERS
-				client.send('Connected users:'.encode('ascii'))
+				client.send(RSAEncode('Connected users:', client_keys[usernames[client.index]]).encode('ascii'))
 				for username in usernames:
-					client.send(f'{username}'.encode('ascii'))
+					client.send(RSAEncode(f'{username}', client_keys[usernames[client.index]]).encode('ascii'))
 			
 			elif cmd.decode('ascii').startswith('CHANNELS'): # LIST ALL ACTIVE CHANNELS
-				client.send('Active channels:'.encode('ascii'))
+				client.send(RSAEncode('Active channels:', client_keys[usernames[client.index]]).encode('ascii'))
 				with open('channel_list.txt', 'r') as c:
 					valid_channels = c.readlines()
 				tmp = ''.join(valid_channels)
+				tmp = RSAEncode(tmp, client_keys[usernames[client.index]])
 				client.send(tmp.encode('ascii'))
 				
 			elif cmd.decode('ascii').startswith('JOIN'): # JOIN A NEW CHANNEL
@@ -280,7 +283,7 @@ def handle(client):
 				if channel_name.startswith('#'):
 					join_channel(client, channel_name)
 				else:
-					client.send('ERROR: Incorrect channel name format, use /help to display valid commands.'.encode('ascii'))
+					client.send(RSAEncode('ERROR: Incorrect channel name format, use /help to display valid commands.', client_keys[usernames[client.index]]).encode('ascii'))
 					
 			elif cmd.decode('ascii').startswith('REQ'): # REQUEST FILE TRANSFER TO ANOTHER USER
 				content = cmd.decode('ascii')[4:]
@@ -297,10 +300,10 @@ def handle(client):
 				hostname = content[1]
 				filename = content[2]
 				host = clients[usernames.index(hostname)]
-				host.send('User has accepted your file transfer request.'.encode('ascii'))
+				host.send(RSAEncode('User has accepted your file transfer request.', client_keys[usernames[client.index]]).encode('ascii'))
 				transfer_file(filename, client)
 				rm_local(filename) # Deletes the server's local copy of the file
-				host.send(f'{filename} has been transferred successfully!'.encode('ascii'))
+				host.send(RSAEncode(f'{filename} has been transferred successfully!', client_keys[usernames[client.index]]).encode('ascii'))
 				print(f'User has accepted file transfer.\nFile {filename} deleted from temporary storage.')
 			
 			elif cmd.decode('ascii').startswith('FTP_NEG'): # TARGET USER DENIED FILE TRANSFER
@@ -308,7 +311,7 @@ def handle(client):
 				hostname = content[1]
 				filename = content[2]
 				host = clients[usernames.index(hostname)]
-				host.send('User has denied your file transfer request.'.encode('ascii'))
+				host.send(RSAEncode('User has denied your file transfer request.', client_keys[usernames[client.index]]).encode('ascii'))
 				rm_local(filename) # Deletes the server's local copy of the file
 				print(f'User has denied file transfer.\nFile {filename} deleted from temporary storage.')
 
@@ -323,13 +326,13 @@ def handle(client):
 		
 		# For connection errors
 		except ConnectionError as err_con:
-			print(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:')
+			print(RSAEncode(f'ERROR: Exception {type(err_con).__name__} thrown within handle() loop, printing details to terminal:', client_keys[usernames[client.index]]))
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
 			exit_seq(client, False) # Start client exit sequence w/o sending an EXIT message
 			break
 		# For file I/O errors
 		except (EOFError, UnicodeError, FileExistsError, FileNotFoundError, IsADirectoryError, NotADirectoryError, PermissionError) as err_io:
-			print(f'ERROR: Exception {type(err_io).__name__} thrown within handle() loop, printing details to terminal:')
+			print(f'ERROR: Exception {type(err_io).__name__} thrown within handle() loop, printing details to terminal:', client_keys[usernames[client.index]])
 			print(sys.exception()) # Print exception to the terminal w/o closing the server
 			exit_seq(client) # Start client exit sequence
 			break
@@ -362,11 +365,11 @@ def receive():
 
 			# Checking if the user is attempting to login as an administrator
 			if username == 'admin': # Change this if we decide to add support for multiple admins
-				client.send('PASS'.encode('ascii')) # Indicates we want the client to send their password
-				password = client.recv(1024).decode('ascii') # Assuming the client sends a password back we need to check it
+				client.send(RSAEncode('PASS', client_keys[username]).encode('ascii')) # Indicates we want the client to send their password
+				password = RSADecode(client.recv(1024), server_private_key).decode('ascii') # Assuming the client sends a password back we need to check it
 				if password != 'Bou-Harb':
 					print(f'User at {str(address)} attempted to login as administrator unsuccesfully.')
-					client.send('REFUSE'.encode('ascii'))
+					client.send(RSAEncode('REFUSE', client_keys[username]).encode('ascii'))
 					client.close()
 					continue # The while-true loop needs to continue, but the code below shouldn't execute for an incorrect login
 
@@ -377,7 +380,6 @@ def receive():
 			print(f'The username of the client is {username}.')
 			broadcast(f'{username} has joined the server.'.encode('ascii'), '#general\n')
 
-			print("test1\n")
 			# We run one thread for each connected client because they all need to be handled simultaneously
 			handle_thread = threading.Thread(target = handle, args = (client,), daemon = True)
 			handle_thread.start()
