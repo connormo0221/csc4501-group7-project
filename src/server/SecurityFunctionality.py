@@ -1,3 +1,4 @@
+#Requires import of pycr
 from Crypto.Util import number
 import numpy as np
 

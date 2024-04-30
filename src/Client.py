@@ -23,11 +23,11 @@ host = '127.0.0.1'
 port = 29170
 
 #Implment basic SSl protection with default context
-context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+#context = ssl.create_default_context()
 
 # Open new socket and connect using host IP and port number defined above
-client_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client = context.wrap_socket(client_base, server_hostname=host)
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+#client = context.wrap_socket(client_base, server_hostname=host)
 client.connect((host, int(port)))
 
 stop_thread = False
@@ -98,14 +98,14 @@ def receive():
 				client.sendall(data)
 				client.send(b"<END>")
 				f.close()
-			elif message.startswith('DATA_RECV'): # Indicates that a file is being transferred
+			elif message.startswith('DATA_RECV'): # Indicates that is being transferred
 				filename = client.recv(1024).decode(), client_private_key
 				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
 				file = open(filename, 'wb')
 				file_bytes = b""
 				done = False
 				while not done:
-					data = client.recv(1024), client_private_key
+					data = client.recv(1024)
 					if file_bytes[-5:] == b"<END>":
 						done = True
 					else:

@@ -17,13 +17,13 @@ server_public_key = server_private_key.public_key
 client_keys = {}
 
 #Implement basic SSl protection with default context
-context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+#context = ssl.create_default_context()
 
-server_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_base.bind((host, port))
-server_base.listen() # Puts the server into listening mode
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind((host, port))
+server.listen() # Puts the server into listening mode
 print(f'Server is now online. Awaiting connections on {host}/{port}.')
-server = context.wrap_socket(server_base, server_side=True)
+#server = context.wrap_socket(server_base, server_side=True)
 
 # Storing connected client info into lists; a single index value should correspond to a user in all lists
 clients = [] # stores (host, port) pairs
