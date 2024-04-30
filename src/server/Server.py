@@ -251,9 +251,10 @@ def handle(client):
 				whisper(sender, target, message)
 			
 			elif cmd.decode('ascii').startswith('USERS'): # LIST ALL CONNECTED USERS
-				client.send('Connected users:'.encode('ascii'))
+				message = 'Connected users:\n'
 				for username in usernames:
-					client.send(f'{username}'.encode('ascii'))
+					message += f'{username}\n'
+				client.send(message.encode('ascii'))
 			
 			elif cmd.decode('ascii').startswith('CHANNELS'): # LIST ALL ACTIVE CHANNELS
 				client.send('Active channels:'.encode('ascii'))
