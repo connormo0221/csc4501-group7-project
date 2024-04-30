@@ -1,198 +1,147 @@
-import threading
-import time
 import socket
-import os
+import threading
+import tkinter
+from tkinter import simpledialog, messagebox, Label, Text, Scrollbar
 
-# IMPORTANT
-# TODO: check that all features are working as intended
-# TODO: check that common errors are handled properly
-# TODO: specify the exceptions we want to catch in try-except statements (it's best practice)
-# SLIGHTLY LESS IMPORTANT
-# TODO: fix not being able to accept file transfer requests due to conflicting connections
-# TODO: make sure the client can exit gracefully from failed file transfers
 
-# Allow client to set their username; used for display on the server
-username = input('Type in a username: ')
-if username == 'admin':
-	password = input('Type in a password: ')
-
-# Server host IP & port number manually set to localhost for this project
 host = '127.0.0.1'
 port = 29170
 
-# Open new socket and connect using host IP and port number defined above
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect((host, int(port)))
+background_gray = '#ABB2B9'
+background_color = '#17202A'
+background_msg = '#2C3E50'
+text_color = '#EAECEE'
+main_font = 'Helvetica 14'
+font_bold = 'Helvitica 13 bold'
 
-stop_thread = False
-fname = ''
-hname = ''
 
-# Add client commands to the help message here
 help_msg = 'Valid commands:\n/help, /exit, /w [user] [message], /online, /channels, /join #[channel name], /transfer [user] [path to file]'
-# Add admin commands to the help message here
+
 admin_help_msg = 'Additional commands for admins:\n/kick [user], /ban [user], /unban [user], /make #[channel name], /close #[channel name]'
 
-# function Receive
-# Receives & decodes data from the server; if data can't be decoded, client disconnects
-def receive():
-	while True:
-		global stop_thread
-		global hname
-		global fname
-		# Use the following line for debugging thread closure
-		#print(f'DEBUG_CLIENT: stop_thread == {stop_thread}')
-		if stop_thread:
-			# Use the following line for debugging thread closure
-			#print('DEBUG_CLIENT: Breaking receive() loop.')
-			client.close()
-			break
+class Client:
 
-		try:
-			message = client.recv(1024).decode('ascii') # Server uses a client to send messages
-			if message == 'ID':
-				client.send(username.encode('ascii'))
-				next_msg = client.recv(1024).decode('ascii')
-				if next_msg == 'PASS': # Using PASS keyword to ask for password
-					client.send(password.encode('ascii'))
-					if client.recv(1024).decode('ascii') == 'REFUSE':
-						print('ERROR: Connection refused due to invalid password.')
-						stop_thread = True
-				elif next_msg == 'BAN': # Using BAN keyword to disconnect user
-					print('ERROR: Connection refused due to being banned by an administrator.')
-					stop_thread = True
-			elif message == 'KICKED': # Using KICKED keyword to disconnect user
-				print('ERROR: Connection to server refused.')
-				stop_thread = True
-			elif message == 'EXIT': # Using EXIT keyword to disconnect user
-				stop_thread = True
-			elif message.startswith('FTP_REQ'): # Using FTP_REQ keyword to request file transfer
-				content = message.split()
-				hname = content[1]
-				fname = content[2]
-				print(f'{content[1]} would like to transfer file {content[2]}. Will you accept? Type /accept or /deny')
-			elif message.startswith('FTP_CONF'): # Indicates a positive response from another client to a FTP_REQ
-				file = message[9:]
-				f = open(file, 'rb')
-				f_size = os.path.getsize(file)
-				client.send(str(f_size).encode())
-				data = f.read()
-				client.sendall(data)
-				client.send(b"<END>")
-				f.close()
-			elif message.startswith('DATA RECV'): #indicates that a file is being transferred
-				file_name = client.recv(1024).decode()
-				#file_size = client.recv(1024).decode() # Uncomment this if we want to implement a progress bar
-				file = open(file_name, 'wb')
-				file_bytes = b""
-				done = False
-				while not done:
-					data = client.recv(1024)
-					if file_bytes[-5:] == b"<END>":
-						done = True
-					else:
-						file_bytes += data
-				file.write(file_bytes)
-				file.close()
+    def __init__(self, host, port):
 
-			else:
-				print(message)
-		except:
-			print('Data transfer stopped, closing connection.')
-			client.close() # Close socket connected to the server
-			break
-	
-	# This line is only reached if the receive() loop has been broken
-	print('Press ENTER to exit.') # Force the user to submit input in order to close the write() thread
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((host, port))
+                
+        msg = tkinter.Tk()
+        msg.withdraw()
 
-# function Write
-# Waits for user input & then sends a message to the server upon pressing the enter key
-def write():
-	global fname
-	global hname
-	while True: # Always running in order to catch input
-		try:
-			content = input("")
-			isAdmin = False
-			if username == 'admin': # Change this if we decide to add support for multiple admins
-				isAdmin = True
+        self.username = simpledialog.askstring("Username", "Please choose a username", parent = msg)
+        if self.username == 'admin':
+            self.password = simpledialog.askstring("Password", "Enter the admin password")
 
-			elif content.startswith('/'): # Forward slash indicates a command is being used; check which command
-				if (content.startswith('/help')):
-					print(help_msg)
-					if isAdmin:
-						print(admin_help_msg)
-				
-				elif (content.startswith('/kick') & isAdmin): # Kicks a user temporarily
-					print(f'Kicking user {content[6:]}')
-					client.send(f'KICK {content[6:]}'.encode('ascii'))
+        self.gui_done = False
+        self.running = True
 
-				elif (content.startswith('/ban') & isAdmin): # Bans a user
-					print(f'Banning user {content[5:]}')
-					client.send(f'BAN {content[5:]}'.encode('ascii'))
+        gui_thread = threading.Thread(target=self.gui_loop)
+        receive_thread = threading.Thread(target=self.receive)
 
-				elif (content.startswith('/unban') & isAdmin): # Unbans a user
-					print(f'Unbanning user {content[7:]}')
-					client.send(f'UNBAN {content[7:]}'.encode('ascii'))
+        if self.running:
+            gui_thread.start()
+            receive_thread.start()
+            
 
-				elif (content.startswith('/make') & isAdmin): # Make a new server channel
-					client.send(f'MAKE {content[6:]}'.encode('ascii'))
+    def gui_loop(self):
+        
+        self.window = tkinter.Tk()
+        self.window.title("Chat")
+        self.window.configure(width=470, height=550, bg=background_color)
+        self.window.iconbitmap('favicon.ico')
+        
+        head_label = Label(self.window, bg=background_color, fg=text_color, text="Welcome", font=font_bold, pady=10)
+        head_label.place(relwidth=1)
+        
+        line = Label(self.window, width=450, bg=background_gray)
+        line.place(relwidth=1, rely=0.07, relheight=0.012)
+        
+        self.text_area = Text(self.window, width=20, height=2, bg=background_color, fg=text_color, font=main_font, padx=5, pady=5)
+        self.text_area.place(relheight=0.745, relwidth=1, rely=0.08)
+        self.text_area.configure(cursor='arrow', state='disabled')
+        
+        scrollbar = Scrollbar(self.text_area)
+        scrollbar.place(relheight=1, relx=0.974)
+        scrollbar.configure(command=self.text_area.yview)
+        
+        bottom_label = Label(self.window, bg=background_gray, height=80)
+        bottom_label.place(relwidth=1, rely=0.825)
+        
+        self.input_area = tkinter.Text(bottom_label, bg=background_msg, fg=text_color, font=main_font)
+        self.input_area.place(relwidth=0.74, relheight=0.06, rely=0.008, relx=0.011)
+        self.input_area.focus()
+        
+        send_button = tkinter.Button(bottom_label, text='Send', font=font_bold, width=20, bg=background_gray, command=self.write)
+        send_button.place(relx=0.77, rely=0.008, relheight=0.06, relwidth=0.22)
+        
+        self.gui_done = True
 
-				elif (content.startswith('/close') & isAdmin): # Closes an existing server channel
-					client.send(f'CLOSE {content[7:]}'.encode('ascii'))
+        self.window.protocol("WM_DELETE_WINDOW", self.stop)
 
-				elif (content.startswith('/exit')): # Exits the server
-					print('Now exiting the server.')
-					client.send('EXIT'.encode('ascii'))
-				
-				elif (content.startswith('/w')): # Sends a private message to another user
-					print('Whispering to another user.')
-					client.send(f'WHISPER {content[3:]}'.encode('ascii'))
+        self.window.mainloop()
 
-				elif (content.startswith('/online')): # Lists all users that are currently online
-					client.send('USERS'.encode('ascii'))
+    def write(self):
+        message = ("{}: {}".format(self.username, self.input_area.get('1.0', 'end')))
+        isAdmin = False
+        if(self.username == 'admin'):
+            isAdmin = True
+        usermsg = self.input_area.get('1.0', 'end')
+        if usermsg.startswith('/'):
+            if(usermsg.startswith('/help')):
+                self.sock.send(help_msg.encode('utf-8'))
+                if isAdmin:
+                    self.sock.send(admin_help_msg)     
+            else:
+                self.socket.send('ERROR: Invalid command. Use /help to list all valid command.')   
+        else:
+            self.sock.send(message.encode('utf-8'))
+            
+        self.input_area.delete('1.0', 'end')
 
-				elif (content.startswith('/channels')): # Lists all available server channels
-					client.send('CHANNELS'.encode('ascii'))
 
-				elif (content.startswith('/join')): # Moves user to another server channel
-					client.send(f'JOIN {content[6:]}'.encode('ascii'))
-				
-				elif (content.startswith('/transfer')): # Sends a request for file transfer to another user
-					command = content.split()
-					target = command[1]
-					file = command[2]
-					client.send(f'REQ {target} {file}'.encode('ascii'))
-				
-				elif(content.startswith('/accept')):
-					client.send(f'FTP_AFF {hname} {fname}')
-					hname = ''
-					fname = ''
+    def stop(self):
+        self.running = False
+        self.window.destroy()
+        self.sock.close()
+        exit(0)
 
-				elif(content.startswith('/deny')):
-					client.send(f'FTP_NEG {hname} {fname}')
-					hname = ''
-					fname = ''
+    
+    
 
-				else:
-					print('ERROR: Invalid command. Use /help to list all valid commands.')
-			else:
-				message = (f'{username}: {content}')
-				client.send(message.encode('ascii'))
+    def receive(self):
+        while self.running:
+                        
+            try:
+                message = self.sock.recv(1024).decode('utf-8') 
 
-		except:
-			if receive_thread.is_alive(): # Only send error message if receive thread is still active
-				print('ERROR: Unable to send a message to the server.')
-			break
-	# Use the following line for debugging thread closure
-	#print('DEBUG_CLIENT: Broke write() loop successfully.')
-		
-# Both functions need their own thread since we need to be able to send & receive messages simultaneously
-receive_thread = threading.Thread(target = receive)
-receive_thread.start()
-
-write_thread = threading.Thread(target = write)
-write_thread.start()
-
-if receive_thread.is_alive() == False & write_thread.is_alive() == False:
-	os._exit(0) # Exit client if both threads have been closed
+                if message == 'USER':
+                    self.sock.send(self.username.encode('utf-8'))
+                    next_msg = self.sock.recv(1024).decode('utf-8')
+                    if next_msg == 'PASS': 
+                        self.sock.send(self.password.encode('utf-8'))
+                        if self.sock.recv(1024).decode('utf-8') == 'REFUSE':
+                            print('ERROR: Connection refused due to invalid password.')
+                            messagebox.showerror("ERROR", "Connection refused due to invalid password.")
+                            self.stop()
+                            client.close()
+                    elif next_msg == 'BAN': 
+                        print('ERROR: Connection refused due to being banned by an administrator.')
+                        messagebox.showerror("ERROR", "Connection refused due to being banned by an administrator.")
+                        self.stop()
+                        client.close()
+                elif message == 'EXIT': 
+                    self.stop()
+                    client.close()                        
+                else:
+                    if self.gui_done:
+                        self.text_area.config(state='normal')
+                        self.text_area.insert('end', message)
+                        self.text_area.yview('end')
+                        self.text_area.config(state='disabled')
+            except:
+                print('Data transfer stopped, closing connection.')
+                self.sock.close()
+                break
+        
+client = Client(host,port)
