@@ -23,7 +23,7 @@ host = '127.0.0.1'
 port = 29170
 
 #Implment basic SSl protection with default context
-context = ssl.create_default_context()
+context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 
 # Open new socket and connect using host IP and port number defined above
 client_base = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
